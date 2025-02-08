@@ -46,13 +46,14 @@ class SWDDriver {
     /**
     * Single turnaround period when no device drives the clock
     */
-    virtual void turnaround();
+    void turnaround();
 
    protected:
     // Hardware specific implementation
-    virtual uint8_t readBit() = 0;
-    virtual void writeBit(uint8_t b) = 0;
-    virtual void setClock(uint8_t b) = 0;
+    virtual uint8_t readSWDIO() = 0;
+    virtual void writeSWDIO(uint8_t b) = 0;
+    virtual void setSWCLK() = 0;
+    virtual void clearSWCLK() = 0;
     virtual void hold() = 0;
 };
 

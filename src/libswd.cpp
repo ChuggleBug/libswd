@@ -9,7 +9,11 @@ uint32_t SWDDriver::readBits(uint8_t cnt) {
     uint32_t data = 0;
     uint8_t i;
     for (i = 0; i < cnt; i++) {
-        data |= readBit() << i;
+        setSWCLK();
+        hold();
+        clearSWCLK();
+        hold();
+        data |= readSWDIO() << i;
     }
     return data;
 }
@@ -17,14 +21,18 @@ uint32_t SWDDriver::readBits(uint8_t cnt) {
 void SWDDriver::writeBits(uint32_t data, uint8_t cnt) {
     uint8_t i;
     for (i = 0; i < cnt; i++) {
-        writeBit( (data >> i) & 0x1);
+        setSWCLK();
+        hold();
+        writeSWDIO( (data >> i) & 0x1);
+        clearSWCLK();
+        hold();
     }
 }
 
 void SWDDriver::turnaround() {
-    setClock(1);
+    setSWCLK();
     hold();
-    setClock(0);
+    clearSWCLK();
     hold();
 }
 
