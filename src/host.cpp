@@ -1,5 +1,5 @@
 
-#include "libswd/libswd.h"
+#include "libswd/host.h"
 
 namespace swd {
 
@@ -81,6 +81,16 @@ uint32_t SWDHost::readBits(uint8_t cnt) {
 void SWDHost::writeBits(uint32_t wdata, uint8_t cnt) {
     driver->cfgSWDIOOut();
     driver->writeBits(wdata, cnt);
+}
+
+void SWDHost::idleShort() {
+    // Added this to remove ambiguity
+    this->writeBits(0x0, 2);
+}
+
+void SWDHost::idleLong() {
+    // Added this to remove ambiguity
+    this->writeBits(0x0, 8);
 }
 
 } // namespace swd

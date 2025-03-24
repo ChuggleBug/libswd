@@ -33,3 +33,6 @@
 
 # Makefile build configurations
 build
+
+# Macos specific files
+.DS_Store
