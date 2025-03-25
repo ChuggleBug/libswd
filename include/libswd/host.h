@@ -22,18 +22,25 @@ class SWDHost {
     void writePort(DP port, uint32_t data);
     void writePort(AP port, uint32_t data);
 
+    // Refer to drivers declarations for these functions meanings
+    void idleShort();
+    void idleLong();
+
   private:
     SWDDriver *driver;
 
+    // AP read and writes require the APBANKSEL
+    // fields in the SELECT register
+    void setAPBANKSEL(AP port);
+
+    // Some DP reads (CTRL_STAT and WCR) require
+    // the CTRLSEL bit set in the SELECT register
+    void setCTRLSEL(uint8_t ctrlsel);
+
     // Generic flow for the protocol
-    // All class methods assume they are able to
-    // being sending bits
+    // Does not handle sending bits
     void sendPacket(uint8_t packet);
-
-    // Does not handle the turnaround since different RW operations
-    // require different period
     ACK readACK();
-
     void writeData(uint32_t data);
     uint32_t readData();
 };

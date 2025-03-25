@@ -13,15 +13,15 @@ enum class DP {
     CTRL_STAT, // 0x4, CTRLSEL = 0, RW
     WCR,       // 0x4, CTRLSEL = 1, RW
     RESEND,    // 0x8, CTRLSEL = X, RO
-    SELECT,    // 0x8, CTRLSEL = 1, WO
-    RDBUFF,    // 0xC, CTRSEL = X, RO
-    ROUTESEL   // 0xC, CTRSEL = X, WO
+    SELECT,    // 0x8, CTRLSEL = X, WO
+    RDBUFF,    // 0xC, CTRLSEL = X, RO
+    ROUTESEL   // 0xC, CTRLSEL = X, WO
 };
 
 enum class AP {
     CSW,  // 0x00
     TAR,  // 0x04
-    DRW,  // 0x08
+    DRW,  // 0x0C
     DB0,  // 0x10
     DB1,  // 0x14
     DB2,  // 0x18
