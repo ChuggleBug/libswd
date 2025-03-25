@@ -128,6 +128,11 @@ void SWDHost::resetLine() {
     driver->idleShort();
 }
 
+void SWDHost::initAP() {
+    writePort(DP::CTRL_STAT, 0x50000000);
+    m_ap_power_on = true;
+}
+
 uint32_t SWDHost::readPort(DP port) {
     if (port == DP::CTRL_STAT) {
         setCTRLSEL(0);
@@ -147,7 +152,11 @@ uint32_t SWDHost::readPort(DP port) {
 }
 
 uint32_t SWDHost::readPort(AP port) {
+    if (!m_ap_power_on) {
+        initAP();
+    }
     setAPBANKSEL(port);
+    Serial.printf("Current AP BANK: 0x%x\n", m_current_banksel);
     uint8_t packet = make_packet(port, RW::READ);
     Serial.printf("SWDHost::readPort: Access Port: 0x%x\n", packet);
     sendPacket(packet);
@@ -158,7 +167,8 @@ uint32_t SWDHost::readPort(AP port) {
     uint32_t data = readData();
     driver->turnaround();
 
-    return data;
+    // Requires another read
+    return readPort(DP::RDBUFF);
 }
 
 void SWDHost::writePort(DP port, uint32_t data) {
@@ -181,7 +191,11 @@ void SWDHost::writePort(DP port, uint32_t data) {
 }
 
 void SWDHost::writePort(AP port, uint32_t data) {
+    if (!m_ap_power_on) {
+        initAP();
+    }
     setAPBANKSEL(port);
+    Serial.printf("Current AP BANK: 0x%x\n", m_current_banksel);
     uint8_t packet = make_packet(port, RW::WRITE);
     Serial.printf("SWDHost::writePort: Access Port: 0x%x\n", packet);
     sendPacket(packet);
@@ -193,6 +207,8 @@ void SWDHost::writePort(AP port, uint32_t data) {
     driver->turnaround();
 
     writeData(data);
+    // TODO: check if all write to AP need this
+    idleShort();
 }
 
 void SWDHost::idleShort() { driver->idleShort(); }
@@ -201,9 +217,21 @@ void SWDHost::idleLong() { driver->idleLong(); }
 
 // private
 
-void SWDHost::setAPBANKSEL(AP port) { writePort(DP::SELECT, getAPBANK(port)); }
+void SWDHost::setAPBANKSEL(AP port) {
+    uint32_t bank = getAPBANK(port);
+    Serial.printf("Checking APBANKSEL match, bank=0x%x, m_current_banksel=0x%x\n", bank, m_current_banksel);
+    if (bank != m_current_banksel) {
+        m_current_banksel = bank;
+        writePort(DP::SELECT, m_current_banksel | m_current_ctrlsel);
+    }
+}
 
-void SWDHost::setCTRLSEL(uint8_t ctrlsel) { writePort(DP::SELECT, (bool)ctrlsel); }
+void SWDHost::setCTRLSEL(uint8_t ctrlsel) {
+    if ((bool)ctrlsel != m_current_ctrlsel) {
+        m_current_ctrlsel = (bool)ctrlsel;
+        writePort(DP::SELECT, m_current_banksel | m_current_ctrlsel);
+    }
+}
 
 void SWDHost::sendPacket(uint8_t packet) { driver->writeBits(packet, 8); }
 

@@ -14,7 +14,12 @@ class SWDHost {
     SWDHost(SWDDriver *d) : driver(d) {}
     ~SWDHost() {}
 
+    // Trigger a line reset for the swd protocol
+    // Additionally triggers the JTAG to SWD sequence
     void resetLine();
+
+    // Powers on the AP module using CTRL_STAT
+    void initAP();
 
     uint32_t readPort(DP port);
     uint32_t readPort(AP port);
@@ -28,6 +33,10 @@ class SWDHost {
 
   private:
     SWDDriver *driver;
+
+    uint32_t m_current_banksel = 0xFF; // Force set on first time
+    uint32_t m_current_ctrlsel = 0xFF; // Force set on first time
+    bool m_ap_power_on = false;
 
     // AP read and writes require the APBANKSEL
     // fields in the SELECT register
