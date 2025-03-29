@@ -133,82 +133,113 @@ void SWDHost::initAP() {
     m_ap_power_on = true;
 }
 
-uint32_t SWDHost::readPort(DP port) {
+
+// Private read and write methods
+Optional<uint32_t> SWDHost::readFromPacket(uint32_t packet, uint32_t retry_count = 10) {
+    if (retry_count == 0) {
+        Serial.println("SWDHost::readFromPacket: Retry Count Exceeded. Exiting...");
+        return Optional<uint32_t>::none();
+    }
+
+    Serial.printf("SWDHost::readFromPacket: packet = 0x%x\n", packet);
+    sendPacket(packet);
+    driver->turnaround();
+
+    ACK ack = readACK();
+    Serial.printf("SWDHost::readFromPacket: ACK = 0x%x\n\r", ack);
+    switch (ack) {
+        case ACK::OK: {
+            Serial.println("SWDHost::readFromPacket: ACK = OK");
+            uint32_t data = readData();
+            driver->turnaround();
+            return Optional<uint32_t>::of(data);
+        }
+        case ACK::WAIT:
+            Serial.println("SWDHost::readFromPacket: ACK = WAIT");
+            driver->turnaround();
+            return readFromPacket(packet, retry_count-1);
+    }
+    Serial.println("SWDHost::readFromPacket: ACK = Not handled");
+    return Optional<uint32_t>::none();
+    
+}
+
+bool SWDHost::writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_count = 10) {
+    if (retry_count == 0) {
+        Serial.println("SWDHost::writeFromPacket: Retry Count Exceeded. Exiting...");
+        return false;
+    }
+
+    Serial.printf("SWDHost::writeFromPacket: packet = 0x%x\n", packet);
+    sendPacket(packet);
+    driver->turnaround();
+
+    ACK ack = readACK();
+    driver->turnaround();
+    Serial.printf("SWDHost::writeFromPacket: ACK = 0x%x\n\r", ack);
+    switch (ack) {
+        case ACK::OK: 
+            Serial.println("SWDHost::writePort: ACK = OK");
+            writeData(data);
+            return true;
+        case ACK::WAIT:
+            Serial.println("SWDHost::writePort: ACK = WAIT");
+            return writeFromPacket(packet, data, retry_count-1);
+    }
+    Serial.println("SWDHost::readFromPacket: ACK = Not handled");
+    return false;
+}
+
+Optional<uint32_t> SWDHost::readPort(DP port) {
     if (port == DP::CTRL_STAT) {
         setCTRLSEL(0);
     } else if (port == DP::WCR) {
         setCTRLSEL(1);
     }
     uint8_t packet = make_packet(port, RW::READ);
-    Serial.printf("SWDHost::readPort: Debug Port: 0x%x\n", packet);
-    sendPacket(packet);
-    driver->turnaround();
-
-    ACK ack = readACK();
-    Serial.printf("SWDHost::readPort: Debug Port ACK: 0x%x\n", ack);
-    uint32_t data = readData();
-    driver->turnaround();
-    return data;
+    return readFromPacket(packet);
 }
 
-uint32_t SWDHost::readPort(AP port) {
+Optional<uint32_t> SWDHost::readPort(AP port) {
     if (!m_ap_power_on) {
         initAP();
     }
     setAPBANKSEL(port);
     Serial.printf("Current AP BANK: 0x%x\n", m_current_banksel);
     uint8_t packet = make_packet(port, RW::READ);
-    Serial.printf("SWDHost::readPort: Access Port: 0x%x\n", packet);
-    sendPacket(packet);
-    driver->turnaround();
-
-    ACK ack = readACK();
-    Serial.printf("SWDHost::readPort: Access Port ACK: 0x%x\n", ack);
-    uint32_t data = readData();
-    driver->turnaround();
-
+    Optional<uint32_t> data = readFromPacket(packet);
+    // If read was not successfull then return nothing
+    if ( !data.hasValue() ) {
+        return Optional<uint32_t>::none();
+    }
     // Requires another read
     return readPort(DP::RDBUFF);
 }
 
-void SWDHost::writePort(DP port, uint32_t data) {
+bool SWDHost::writePort(DP port, uint32_t data) {
     if (port == DP::CTRL_STAT) {
         setCTRLSEL(0);
     } else if (port == DP::WCR) {
         setCTRLSEL(1);
     }
     uint8_t packet = make_packet(port, RW::WRITE);
-    Serial.printf("SWDHost::writePort: Debug Port: 0x%x\n", packet);
-    sendPacket(packet);
-    driver->turnaround();
-
-    ACK ack = readACK();
-    Serial.printf("SWDHost::writePort: Debug Port ACK: 0x%x\n", ack);
-    // Write needs a turnaround period from host to target
-    driver->turnaround();
-
-    writeData(data);
+    return writeFromPacket(packet, data);
 }
 
-void SWDHost::writePort(AP port, uint32_t data) {
+bool SWDHost::writePort(AP port, uint32_t data) {
     if (!m_ap_power_on) {
         initAP();
     }
     setAPBANKSEL(port);
     Serial.printf("Current AP BANK: 0x%x\n", m_current_banksel);
     uint8_t packet = make_packet(port, RW::WRITE);
-    Serial.printf("SWDHost::writePort: Access Port: 0x%x\n", packet);
-    sendPacket(packet);
-    driver->turnaround();
-
-    ACK ack = readACK();
-    Serial.printf("SWDHost::writePort: Access Port ACK: 0x%x\n", ack);
-    // Write needs a turnaround period from host to target
-    driver->turnaround();
-
-    writeData(data);
-    // TODO: check if all write to AP need this
-    idleShort();
+    bool write_success = writeFromPacket(packet, data);
+    if ( write_success ) {
+        // TODO: check if all write to AP need this
+        idleShort();
+        return true;
+    }
+    return false;
 }
 
 void SWDHost::idleShort() { driver->idleShort(); }
@@ -219,18 +250,25 @@ void SWDHost::idleLong() { driver->idleLong(); }
 
 void SWDHost::setAPBANKSEL(AP port) {
     uint32_t bank = getAPBANK(port);
-    Serial.printf("Checking APBANKSEL match, bank=0x%x, m_current_banksel=0x%x\n", bank, m_current_banksel);
-    if (bank != m_current_banksel) {
+    if (bank != m_current_banksel || m_current_banksel == DEFAULT_SEL_VALUE ) {
         m_current_banksel = bank;
-        writePort(DP::SELECT, m_current_banksel | m_current_ctrlsel);
+        updateSELECT();
     }
 }
 
 void SWDHost::setCTRLSEL(uint8_t ctrlsel) {
-    if ((bool)ctrlsel != m_current_ctrlsel) {
-        m_current_ctrlsel = (bool)ctrlsel;
-        writePort(DP::SELECT, m_current_banksel | m_current_ctrlsel);
+    uint32_t sel_bit = (bool)ctrlsel;
+    if (sel_bit != m_current_ctrlsel || m_current_ctrlsel == DEFAULT_SEL_VALUE) {
+        m_current_ctrlsel == sel_bit;
+        updateSELECT();
     }
+}
+
+void SWDHost::updateSELECT() {
+    writePort(DP::SELECT, 
+        (m_current_banksel == DEFAULT_SEL_VALUE ? 0x00 : m_current_banksel) |
+        (m_current_ctrlsel == DEFAULT_SEL_VALUE ? 0x00 : m_current_ctrlsel)
+    );
 }
 
 void SWDHost::sendPacket(uint8_t packet) { driver->writeBits(packet, 8); }

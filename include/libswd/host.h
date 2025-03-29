@@ -4,6 +4,7 @@
 
 #include "driver.h"
 #include "packet.h"
+#include "optional.h"
 
 namespace swd {
 
@@ -21,11 +22,11 @@ class SWDHost {
     // Powers on the AP module using CTRL_STAT
     void initAP();
 
-    uint32_t readPort(DP port);
-    uint32_t readPort(AP port);
+    Optional<uint32_t> readPort(DP port);
+    Optional<uint32_t> readPort(AP port);
 
-    void writePort(DP port, uint32_t data);
-    void writePort(AP port, uint32_t data);
+    bool writePort(DP port, uint32_t data);
+    bool writePort(AP port, uint32_t data);
 
     // Refer to drivers declarations for these functions meanings
     void idleShort();
@@ -34,9 +35,17 @@ class SWDHost {
   private:
     SWDDriver *driver;
 
-    uint32_t m_current_banksel = 0xFF; // Force set on first time
-    uint32_t m_current_ctrlsel = 0xFF; // Force set on first time
+    const uint32_t DEFAULT_SEL_VALUE = 0xbeefcafe;
+    uint32_t m_current_banksel = DEFAULT_SEL_VALUE; // Force set on first time
+    uint32_t m_current_ctrlsel = DEFAULT_SEL_VALUE; // Force set on first time
     bool m_ap_power_on = false;
+
+    Optional<uint32_t> readFromPacket(uint32_t packet, uint32_t retry_count);
+    bool writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_count);
+
+
+    // Generic SELECT write
+    void updateSELECT();
 
     // AP read and writes require the APBANKSEL
     // fields in the SELECT register
