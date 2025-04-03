@@ -3,8 +3,8 @@
 #define __SWD_HOST_H
 
 #include "driver.h"
-#include "packet.h"
 #include "optional.h"
+#include "packet.h"
 
 namespace swd {
 
@@ -17,11 +17,16 @@ class SWDHost {
 
     // Trigger a line reset for the swd protocol
     // Additionally triggers the JTAG to SWD sequence
-    void resetLine();
+    // Returns whether or not a reset was successful
+    bool resetLine();
 
     // Powers on the AP module using CTRL_STAT
     void initAP();
 
+    // Stops host from being able to send packets
+    void stopHost();
+
+    // Reads to DP WCR toggles the CTRLSEL bit
     Optional<uint32_t> readPort(DP port);
     Optional<uint32_t> readPort(AP port);
 
@@ -32,17 +37,22 @@ class SWDHost {
     void idleShort();
     void idleLong();
 
-  private:
-    SWDDriver *driver;
-
-    const uint32_t DEFAULT_SEL_VALUE = 0xbeefcafe;
-    uint32_t m_current_banksel = DEFAULT_SEL_VALUE; // Force set on first time
-    uint32_t m_current_ctrlsel = DEFAULT_SEL_VALUE; // Force set on first time
-    bool m_ap_power_on = false;
-
+    // TODO: Move to private
     Optional<uint32_t> readFromPacket(uint32_t packet, uint32_t retry_count);
     bool writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_count);
 
+  private:
+    SWDDriver *driver;
+
+    // Host/Target flags
+    bool m_stopHost = false;    // Target has some unrecoverable error and host needs to be stopped
+    bool m_ap_power_on = false; // Target's AP port is powered on
+
+    // BANKSEL and CTRLSEL bits
+    // Used to prevent repetitive reads and writes to the target
+    const uint32_t DEFAULT_SEL_VALUE = 0xbeefcafe;
+    uint32_t m_current_banksel = DEFAULT_SEL_VALUE; // Force set on first time
+    uint32_t m_current_ctrlsel = DEFAULT_SEL_VALUE; // Force set on first time
 
     // Generic SELECT write
     void updateSELECT();
@@ -54,6 +64,10 @@ class SWDHost {
     // Some DP reads (CTRL_STAT and WCR) require
     // the CTRLSEL bit set in the SELECT register
     void setCTRLSEL(uint8_t ctrlsel);
+
+    // Fault and Error status handling
+    void handleFault();
+    void handleError(uint32_t retry_count);
 
     // Generic flow for the protocol
     // Does not handle sending bits
