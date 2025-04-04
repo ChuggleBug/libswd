@@ -124,43 +124,65 @@ uint32_t getAPBANK(swd::AP port) {
 
 namespace swd {
 
-bool SWDHost::resetLine() {
+void SWDHost::resetLine() {
     driver->init();
-    if ( readPort(DP::IDCODE).hasValue() ) {
-        driver->idleShort();
-        writePort(DP::ABORT, 0x1F); // Clear all errors on reset
-        return true;
+    if ( !readFromPacketUnsafe(make_packet(DP::IDCODE, RW::READ)).hasValue() ) {
+        stop();
+        return;
     }
-    return false;
+    driver->idleShort();
+    writePort(DP::ABORT, 0x1F); // Clear all errors on reset
+}
+
+void SWDHost::reset() {
+    m_stop_host = false; 
+    resetLine();
+    m_ap_power_on = false;
+    m_current_banksel = DEFAULT_SEL_VALUE;
+    m_current_ctrlsel = DEFAULT_SEL_VALUE;
+}
+
+inline void SWDHost::stop() {
+    Serial.println("Stopping Host");
+    m_stop_host = true;
+}
+
+inline bool SWDHost::isStopped() {
+    return m_stop_host;
 }
 
 void SWDHost::initAP() {
-    writePort(DP::CTRL_STAT, 0x50000000);
-    Optional<uint32_t> powerup_ack = Optional<uint32_t>::none();
-    uint32_t retry_count = 10;
-    do {
-        powerup_ack = readPort(DP::CTRL_STAT);
-        if (!powerup_ack.hasValue()) {
-            retry_count--;
-        }
-        if (retry_count == 0) {
-            Serial.println("Count not initalize AP port. Stopping host");
-            stopHost();
-            return;
-        }
-    } while (!powerup_ack.hasValue() && powerup_ack.getValue() != 0xF0000000 );
+    Serial.println("Initializing Access Port");
+    if (!(writePort(DP::CTRL_STAT, 0x50000000) && readPort(DP::CTRL_STAT).hasValue())) {
+        Serial.println("Count not initalize AP port. Stopping host");
+        stop();
+        return;
+    }
     m_ap_power_on = true;
 }
 
+// Private read and write methods
+Optional<uint32_t> SWDHost::readFromPacketUnsafe(uint32_t packet, ACK *ack) {
+    Serial.printf("SWDHost::readFromPacketUnsafe: packet = 0x%x\n\r", packet);
+    sendPacket(packet);
+    driver->turnaround();
+    ACK rd_ack = readACK();
+    Optional<uint32_t> data = Optional<uint32_t>::none();
 
-void SWDHost::stopHost() {
-    m_stopHost = true;
+    if (rd_ack == ACK::OK) {
+        Serial.println("SWDHost::readFromPacketUnsafe: ACK = OK");
+        data = Optional<uint32_t>::of(readData());
+        driver->turnaround();
+    }
+
+    if (ack != nullptr) {
+        *ack = rd_ack;
+    }
+    return data;
 }
 
-
-// Private read and write methods
 Optional<uint32_t> SWDHost::readFromPacket(uint32_t packet, uint32_t retry_count) {
-    if (m_stopHost) {
+    if (isStopped()) {
         Serial.println("SWDHost::writeFromPacket: Host is stopped. Will no longer respond");
         return Optional<uint32_t>::none();
     }
@@ -171,16 +193,13 @@ Optional<uint32_t> SWDHost::readFromPacket(uint32_t packet, uint32_t retry_count
         return Optional<uint32_t>::none();
     }
 
-    sendPacket(packet);
-    driver->turnaround();
-    ACK ack = readACK();
-    Serial.printf("SWDHost::readFromPacket: ACK = 0x%x\n\r", ack);
+    ACK ack;
+    Optional<uint32_t> data = readFromPacketUnsafe(packet, &ack);
+
     switch (ack) {
         case ACK::OK: {
-            Serial.println("SWDHost::readFromPacket: ACK = OK");
-            uint32_t data = readData();
-            driver->turnaround();
-            return Optional<uint32_t>::of(data);
+            Serial.println("SWDHost::readFromPacket: ACK = Ok");
+            return data;
         }
         case ACK::WAIT:
             Serial.println("SWDHost::readFromPacket: ACK = WAIT");
@@ -193,12 +212,35 @@ Optional<uint32_t> SWDHost::readFromPacket(uint32_t packet, uint32_t retry_count
             return readFromPacket(packet, retry_count-1);
     }
     Serial.println("SWDHost::readFromPacket: ACK = ERROR");
-    handleError(retry_count-1);
+    handleError();
     return Optional<uint32_t>::none();
 }
 
+
+bool SWDHost::writeFromPacketUnsafe(uint32_t packet, uint32_t data, ACK *ack) {
+    Serial.printf("SWDHost::writeFromPacketUnsafe: packet = 0x%x\n\r", packet);
+    sendPacket(packet);
+    driver->turnaround();
+    ACK w_ack = readACK();
+    driver->turnaround();
+
+    // write method might return early, so save to reference now
+    if (ack != nullptr) {
+        *ack = w_ack;
+    }
+
+    if (w_ack == ACK::OK) {
+        Serial.println("SWDHost::writeFromPacketUnsafe: ACK = OK");
+        writeData(data);
+        return true;
+    }
+
+    return false;
+}
+
+
 bool SWDHost::writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_count) {
-    if (m_stopHost) {
+    if (isStopped()) {
         Serial.println("SWDHost::writeFromPacket: Host is stopped. Will no longer respond");
         return false;
     }
@@ -208,15 +250,13 @@ bool SWDHost::writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_cou
         return false;
     }
 
-    sendPacket(packet);
-    driver->turnaround();
+    ACK ack;
+    writeFromPacketUnsafe(packet, data, &ack);
 
-    ACK ack = readACK();
-    driver->turnaround();
     switch (ack) {
         case ACK::OK: 
             Serial.println("SWDHost::writeFromPacket: ACK = OK");
-            writeData(data);
+            // Data was already written by the unsafe method
             return true;
         case ACK::WAIT:
             Serial.println("SWDHost::writeFromPacket: ACK = WAIT");
@@ -227,7 +267,7 @@ bool SWDHost::writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_cou
             return writeFromPacket(packet, data, retry_count-1);
     }
     Serial.println("SWDHost::writeFromPacket: ACK = ERROR");
-    handleError(retry_count-1);
+    handleError();
     return false;
 }
 
@@ -242,8 +282,6 @@ Optional<uint32_t> SWDHost::readPort(DP port) {
     if (port == DP::WCR) {
        setCTRLSEL(0);
     }
-    if (data.hasValue()) { Serial.println("Data was read"); } 
-    else { Serial.println("Data was not read"); }
     
     return data;
 }
@@ -285,17 +323,18 @@ bool SWDHost::writePort(AP port, uint32_t data) {
     setAPBANKSEL(port);
     uint8_t packet = make_packet(port, RW::WRITE);
     bool write_success = writeFromPacket(packet, data, 10);
+    // Based on evidence, two short idle periods completes 
+    // the AP transaction
     if ( write_success ) {
-        // TODO: check if all write to AP need this
         idleShort();
-        return true;
+        idleShort();
     }
-    return false;
+    return write_success;
 }
 
-void SWDHost::idleShort() { driver->idleShort(); }
+inline void SWDHost::idleShort() { driver->idleShort(); }
 
-void SWDHost::idleLong() { driver->idleLong(); }
+inline void SWDHost::idleLong() { driver->idleLong(); }
 
 // private
 
@@ -322,7 +361,7 @@ void SWDHost::updateSELECT() {
     );
 }
 
-void SWDHost::sendPacket(uint8_t packet) { driver->writeBits(packet, 8); }
+inline void SWDHost::sendPacket(uint8_t packet) { driver->writeBits(packet, 8); }
 
 ACK SWDHost::readACK() {
     uint32_t ack = driver->readBits(3);
@@ -375,20 +414,26 @@ void SWDHost::handleFault() {
     }
 }
 
-void SWDHost::handleError(uint32_t retry_count) {
+void SWDHost::handleError() {
     // Cases that cause an error typically cuase a desync between the target and the host
     // a line reset is tried before stopping the host
-    if ( retry_count == 0 ) {
-        Serial.println("SWDHost::handleError: Could not resync target and host. Trying a line reset");
-        bool reset_success = resetLine();
-        if ( !reset_success ) {
-            Serial.println("SWDHost::handleError: Line reset was not successful. Stopping host");
-            stopHost();
-            return;
-        }
+    // For the most part, when an error ACK (a lack of one) is read, a single turnaround
+    // should be expected to check and see if the target exists at all
+    driver->turnaround();
+    if ( readFromPacketUnsafe(make_packet(DP::IDCODE, RW::READ)).hasValue() ) {
+        Serial.println("SWDHost::handleError: Target resynced. Packet dropped");
+        return;
     }
-    // Try to continue to read a ID code
-    readFromPacket(make_packet(DP::IDCODE, RW::READ), retry_count);
+
+    // Reset line and reread again
+    resetLine();
+    Serial.println("SWDHost::handleError: Target reset. Testing Read");
+
+    if ( !readFromPacketUnsafe(make_packet(DP::IDCODE, RW::READ)).hasValue() ) {
+        Serial.println("SWDHost::handleError: Cannot read from target, stopping host");
+        stop();
+    }
+
 }
 
 } // namespace swd

@@ -15,16 +15,17 @@ class SWDHost {
     SWDHost(SWDDriver *d) : driver(d) {}
     ~SWDHost() {}
 
-    // Trigger a line reset for the swd protocol
-    // Additionally triggers the JTAG to SWD sequence
-    // Returns whether or not a reset was successful
-    bool resetLine();
+    // Stops host from being able to send packets
+    void stop();
+
+    // Resets the host to its initial state
+    void reset();
 
     // Powers on the AP module using CTRL_STAT
+    // TODO: move to private
     void initAP();
 
-    // Stops host from being able to send packets
-    void stopHost();
+    bool isStopped();
 
     // Reads to DP WCR toggles the CTRLSEL bit
     Optional<uint32_t> readPort(DP port);
@@ -38,14 +39,14 @@ class SWDHost {
     void idleLong();
 
     // TODO: Move to private
-    Optional<uint32_t> readFromPacket(uint32_t packet, uint32_t retry_count);
-    bool writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_count);
+    Optional<uint32_t> readFromPacket(uint32_t packet, uint32_t retry_count = 10);
+    bool writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_count = 10);
 
   private:
     SWDDriver *driver;
 
     // Host/Target flags
-    bool m_stopHost = false;    // Target has some unrecoverable error and host needs to be stopped
+    bool m_stop_host = false;    // Target has some unrecoverable error and host needs to be stopped
     bool m_ap_power_on = false; // Target's AP port is powered on
 
     // BANKSEL and CTRLSEL bits
@@ -53,6 +54,9 @@ class SWDHost {
     const uint32_t DEFAULT_SEL_VALUE = 0xbeefcafe;
     uint32_t m_current_banksel = DEFAULT_SEL_VALUE; // Force set on first time
     uint32_t m_current_ctrlsel = DEFAULT_SEL_VALUE; // Force set on first time
+
+    // Trigger a line reset 
+    void resetLine();
 
     // Generic SELECT write
     void updateSELECT();
@@ -67,7 +71,13 @@ class SWDHost {
 
     // Fault and Error status handling
     void handleFault();
-    void handleError(uint32_t retry_count);
+    void handleError();
+
+    // Unsafe Variants of reading and writing methods
+    // Procceeds with the OK flow of control, and returns error values
+    // on non OK cases
+    Optional<uint32_t> readFromPacketUnsafe(uint32_t packet, ACK *ack = nullptr);
+    bool writeFromPacketUnsafe(uint32_t packet, uint32_t data, ACK *ack = nullptr);
 
     // Generic flow for the protocol
     // Does not handle sending bits
