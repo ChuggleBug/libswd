@@ -1,9 +1,7 @@
 #include "libswd/host.h"
 #include "libswd/packet.h"
 #include "libswd/optional.h"
-
-// TODO: Remove Eventually
-#include <Arduino.h>
+#include "libswd/logger.h"
 
 namespace { // anonymous
 
@@ -38,31 +36,43 @@ void set_packet_parity(uint8_t *packet) {
 }
 
 uint8_t make_packet(swd::DP port, RW access) {
-    Serial.println();
+
     uint8_t packet = PACKET_BASE | DP_Port | static_cast<uint8_t>(access);
+
+    // Mostly for debugging
+    if (Logger::isSet()) {
+        switch (port) {
+        case swd::DP::ABORT:     Logger::debug("make_packet: DP ABORT"); break;
+        case swd::DP::IDCODE:    Logger::debug("make_packet: DP IDCODE"); break;
+        case swd::DP::CTRL_STAT: Logger::debug("make_packet: DP CTRL/STAT"); break;
+        case swd::DP::WCR:       Logger::debug("make_packet: DP WCR"); break;
+        case swd::DP::RESEND:    Logger::debug("make_packet: DP RESEND"); break;
+        case swd::DP::SELECT:    Logger::debug("make_packet: DP SELECT"); break;
+        case swd::DP::RDBUFF:    Logger::debug("make_packet: DP RDBUFF"); break;
+        case swd::DP::ROUTESEL:  Logger::debug("make_packet: DP ROUTESEL"); break;
+        default:                 Logger::warn("Unknown debug port"); break;
+        }
+    }
+
     switch (port) {
-    case swd::DP::ABORT:
-    case swd::DP::IDCODE:
-        Serial.println("make_packet: DP ABORT/IDCODE");
-        packet |= Ax0;
-        break;
-    case swd::DP::CTRL_STAT:
-    case swd::DP::WCR:
-        Serial.println("make_packet: DP CTRL_STAT/WCR");
-        packet |= Ax4;
-        break;
-    case swd::DP::RESEND:
-    case swd::DP::SELECT:
-        Serial.println("make_packet: DP RESET/SELECT");
-        packet |= Ax8;
-        break;
-    case swd::DP::RDBUFF:
-    case swd::DP::ROUTESEL:
-        Serial.println("make_packet: DP RDBUFF/ROUTSEL");
-        packet |= AxC;
-        break;
-    default:
-        break;
+        case swd::DP::ABORT:
+        case swd::DP::IDCODE:
+            packet |= Ax0;
+            break;
+        case swd::DP::CTRL_STAT:
+        case swd::DP::WCR:
+            packet |= Ax4;
+            break;
+        case swd::DP::RESEND:
+        case swd::DP::SELECT:
+            packet |= Ax8;
+            break;
+        case swd::DP::RDBUFF:
+        case swd::DP::ROUTESEL:
+            packet |= AxC;
+            break;
+        default:
+            break;
     }
     set_packet_parity(&packet);
     return packet;
@@ -70,31 +80,48 @@ uint8_t make_packet(swd::DP port, RW access) {
 
 uint8_t make_packet(swd::AP port, RW access) {
     uint8_t packet = PACKET_BASE | AP_Port | static_cast<uint8_t>(access);
+
+    if (Logger::isSet()) {
+        switch (port) {
+        case swd::AP::CSW:  Logger::debug("make_packet: AP CSW"); break;
+        case swd::AP::DB0:  Logger::debug("make_packet: AP DB0"); break;
+        case swd::AP::TAR:  Logger::debug("make_packet: AP TAR"); break;
+        case swd::AP::DB1:  Logger::debug("make_packet: AP DB1"); break;
+        case swd::AP::CFG:  Logger::debug("make_packet: AP CFG"); break;
+        case swd::AP::DB2:  Logger::debug("make_packet: AP DB2"); break;
+        case swd::AP::BASE: Logger::debug("make_packet: AP BASE"); break;
+        case swd::AP::DRW:  Logger::debug("make_packet: AP DRW"); break;
+        case swd::AP::IDR:  Logger::debug("make_packet: AP IDR"); break;
+        case swd::AP::DB3:  Logger::debug("make_packet: AP BD3"); break;
+        default:            Logger::warn("Unknown access port"); break;
+        }
+    }
+
     switch (port) {
-    case swd::AP::CSW:
-    case swd::AP::DB0:
-        Serial.println("make_packet: AP CSW/BD0");
-        packet |= Ax0;
-        break;
-    case swd::AP::TAR:
-    case swd::AP::DB1:
-    case swd::AP::CFG:
-        Serial.println("make_packet: AP TAR/BD1/CFG");
-        packet |= Ax4;
-        break;
-    case swd::AP::DB2:
-    case swd::AP::BASE:
-        Serial.println("make_packet: AP BD2/BASE");
-        packet |= Ax8;
-        break;
-    case swd::AP::DRW:
-    case swd::AP::IDR:
-    case swd::AP::DB3:
-        Serial.println("make_packet: AP DRW/IDR/BD3");
-        packet |= AxC;
-        break;
-    default:
-        break;
+        case swd::AP::CSW:
+        case swd::AP::DB0:
+            Logger::debug("make_packet: AP CSW/BD0");
+            packet |= Ax0;
+            break;
+        case swd::AP::TAR:
+        case swd::AP::DB1:
+        case swd::AP::CFG:
+            Logger::debug("make_packet: AP TAR/BD1/CFG");
+            packet |= Ax4;
+            break;
+        case swd::AP::DB2:
+        case swd::AP::BASE:
+            Logger::debug("make_packet: AP BD2/BASE");
+            packet |= Ax8;
+            break;
+        case swd::AP::DRW:
+        case swd::AP::IDR:
+        case swd::AP::DB3:
+            Logger::debug("make_packet: AP DRW/IDR/BD3");
+            packet |= AxC;
+            break;
+        default:
+            break;
     }
     set_packet_parity(&packet);
     return packet;
@@ -143,7 +170,7 @@ void SWDHost::reset() {
 }
 
 inline void SWDHost::stop() {
-    Serial.println("Stopping Host");
+    Logger::error("Host cannot connect to target. Stopping...");
     m_stop_host = true;
 }
 
@@ -152,9 +179,9 @@ inline bool SWDHost::isStopped() {
 }
 
 void SWDHost::initAP() {
-    Serial.println("Initializing Access Port");
+    Logger::info("Initializing Access Port");
     if (!(writePort(DP::CTRL_STAT, 0x50000000) && readPort(DP::CTRL_STAT).hasValue())) {
-        Serial.println("Count not initalize AP port. Stopping host");
+        Logger::error("Count not initalize AP port. Stopping host");
         stop();
         return;
     }
@@ -163,14 +190,12 @@ void SWDHost::initAP() {
 
 // Private read and write methods
 Optional<uint32_t> SWDHost::readFromPacketUnsafe(uint32_t packet, ACK *ack) {
-    Serial.printf("SWDHost::readFromPacketUnsafe: packet = 0x%x\n\r", packet);
     sendPacket(packet);
     driver->turnaround();
     ACK rd_ack = readACK();
     Optional<uint32_t> data = Optional<uint32_t>::none();
 
     if (rd_ack == ACK::OK) {
-        Serial.println("SWDHost::readFromPacketUnsafe: ACK = OK");
         data = Optional<uint32_t>::of(readData());
         driver->turnaround();
     }
@@ -183,13 +208,12 @@ Optional<uint32_t> SWDHost::readFromPacketUnsafe(uint32_t packet, ACK *ack) {
 
 Optional<uint32_t> SWDHost::readFromPacket(uint32_t packet, uint32_t retry_count) {
     if (isStopped()) {
-        Serial.println("SWDHost::writeFromPacket: Host is stopped. Will no longer respond");
+        Logger::warn("Host is stopped. Will no longer read");
         return Optional<uint32_t>::none();
     }
 
-    Serial.printf("SWDHost::readFromPacket: Tries Left for this read: %lu\n\r", retry_count);
     if (retry_count == 0) {
-        Serial.println("SWDHost::readFromPacket: Retry Count Exceeded. Exiting...");
+        Logger::info("Read retry count exceeded. Aborting read");
         return Optional<uint32_t>::none();
     }
 
@@ -198,27 +222,26 @@ Optional<uint32_t> SWDHost::readFromPacket(uint32_t packet, uint32_t retry_count
 
     switch (ack) {
         case ACK::OK: {
-            Serial.println("SWDHost::readFromPacket: ACK = Ok");
+            Logger::debug("SWDHost::readFromPacket: ACK = Ok");
             return data;
         }
         case ACK::WAIT:
-            Serial.println("SWDHost::readFromPacket: ACK = WAIT");
+            Logger::debug("SWDHost::readFromPacket: ACK = WAIT");
             driver->turnaround();
             return readFromPacket(packet, retry_count-1);
         case ACK::FAULT:
             driver->turnaround();
-            Serial.println("SWDHost::readFromPacket: ACK = FAULT");
+            Logger::debug("SWDHost::readFromPacket: ACK = FAULT");
             handleFault();
             return readFromPacket(packet, retry_count-1);
     }
-    Serial.println("SWDHost::readFromPacket: ACK = ERROR");
+    Logger::debug("SWDHost::readFromPacket: ACK = ERROR");
     handleError();
     return Optional<uint32_t>::none();
 }
 
 
 bool SWDHost::writeFromPacketUnsafe(uint32_t packet, uint32_t data, ACK *ack) {
-    Serial.printf("SWDHost::writeFromPacketUnsafe: packet = 0x%x\n\r", packet);
     sendPacket(packet);
     driver->turnaround();
     ACK w_ack = readACK();
@@ -230,7 +253,6 @@ bool SWDHost::writeFromPacketUnsafe(uint32_t packet, uint32_t data, ACK *ack) {
     }
 
     if (w_ack == ACK::OK) {
-        Serial.println("SWDHost::writeFromPacketUnsafe: ACK = OK");
         writeData(data);
         return true;
     }
@@ -241,12 +263,11 @@ bool SWDHost::writeFromPacketUnsafe(uint32_t packet, uint32_t data, ACK *ack) {
 
 bool SWDHost::writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_count) {
     if (isStopped()) {
-        Serial.println("SWDHost::writeFromPacket: Host is stopped. Will no longer respond");
+        Logger::warn("Host is stopped. Will no longer write");
         return false;
     }
-    Serial.printf("SWDHost::writeFromPacket: Tries Left for this read: %lu\n\r", retry_count);
     if (retry_count == 0) {
-        Serial.println("SWDHost::writeFromPacket: Retry Count Exceeded. Exiting...");
+        Logger::info("SWDHost::writeFromPacket: Retry Count Exceeded. Exiting...");
         return false;
     }
 
@@ -255,18 +276,18 @@ bool SWDHost::writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_cou
 
     switch (ack) {
         case ACK::OK: 
-            Serial.println("SWDHost::writeFromPacket: ACK = OK");
+            Logger::debug("SWDHost::writeFromPacket: ACK = OK");
             // Data was already written by the unsafe method
             return true;
         case ACK::WAIT:
-            Serial.println("SWDHost::writeFromPacket: ACK = WAIT");
+            Logger::debug("SWDHost::writeFromPacket: ACK = WAIT");
             return writeFromPacket(packet, data, retry_count-1);
         case ACK::FAULT:
-            Serial.println("SWDHost::readFromPacket: ACK = FAULT");
+            Logger::debug("SWDHost::readFromPacket: ACK = FAULT");
             handleFault();
             return writeFromPacket(packet, data, retry_count-1);
     }
-    Serial.println("SWDHost::writeFromPacket: ACK = ERROR");
+    Logger::debug("SWDHost::writeFromPacket: ACK = ERROR");
     handleError();
     return false;
 }
@@ -291,7 +312,6 @@ Optional<uint32_t> SWDHost::readPort(AP port) {
         initAP();
     }
     setAPBANKSEL(port);
-    Serial.printf("Current AP BANK: 0x%x\n\r", m_current_banksel);
     uint8_t packet = make_packet(port, RW::READ);
     Optional<uint32_t> data = readFromPacket(packet, 10);
     // If read was not successfull then return nothing
@@ -378,27 +398,21 @@ ACK SWDHost::readACK() {
     }
 }
 
-// TODO: REMOVE ME AFTER TESTING
-bool flip = false;
-
 void SWDHost::writeData(uint32_t data) {
     uint32_t parity = calculate_data_parity(data);
-    // TODO: REMOVE ME AFTER TESTING
-    if (flip) {
-        Serial.println("SWDHost::writeData: Testing With flipped parity");
-        parity = ~parity;
-    }
     driver->writeBits(data, 32);
     driver->writeBits(parity, 1);
-    Serial.printf("SWDHost::writeData: Data Written: 0x%x, parity: 0x%x\n\r", data, parity & 0x1);
+    // Serial.printf("SWDHost::writeData: Data Written: 0x%x, parity: 0x%x\n\r", data, parity & 0x1);
 }
 
 uint32_t SWDHost::readData() {
     uint32_t data = driver->readBits(32);
     uint32_t parity = driver->readBits(1);
     if (calculate_data_parity(data) != parity) {
+        Logger::info("Parity error detected in read data received.");
+        // TODO: add retry logic
     }
-    Serial.printf("SWDHost::readData: Data Read: 0x%x, parity: 0x%x\n\r", data, parity);
+    // Serial.printf("SWDHost::readData: Data Read: 0x%x, parity: 0x%x\n\r", data, parity);
     return data;
 }
 
@@ -407,10 +421,10 @@ void SWDHost::handleFault() {
     //  - Partiy error in the wdata
     uint32_t ctrl_stat = readPort(DP::CTRL_STAT).getValue();
     if (ctrl_stat & 0x80) { // WDATAERR
-        Serial.println("Parity Error in the previous write data sent detected.");
+        Logger::info("Parity Error in the previous write data sent detected.");
         writePort(DP::ABORT, 0x8); // WDERRCLR
     } else {
-        Serial.println("Detected Fault. Left unhandlded");
+        Logger::info("Detected Fault. Left unhandlded");
     }
 }
 
@@ -421,17 +435,20 @@ void SWDHost::handleError() {
     // should be expected to check and see if the target exists at all
     driver->turnaround();
     if ( readFromPacketUnsafe(make_packet(DP::IDCODE, RW::READ)).hasValue() ) {
-        Serial.println("SWDHost::handleError: Target resynced. Packet dropped");
+        Logger::info("Error handler target resynced. Packet dropped");
         return;
     }
 
     // Reset line and reread again
     resetLine();
-    Serial.println("SWDHost::handleError: Target reset. Testing Read");
+    Logger::warn("Error handler target line reset. Testing Read");
 
     if ( !readFromPacketUnsafe(make_packet(DP::IDCODE, RW::READ)).hasValue() ) {
-        Serial.println("SWDHost::handleError: Cannot read from target, stopping host");
-        stop();
+        Logger::error("Was not able to read from target");
+        // Might have been stopped by the reset line method
+        if (!isStopped()) { 
+            stop();
+        }
     }
 
 }

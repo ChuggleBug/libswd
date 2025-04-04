@@ -21,10 +21,6 @@ class SWDHost {
     // Resets the host to its initial state
     void reset();
 
-    // Powers on the AP module using CTRL_STAT
-    // TODO: move to private
-    void initAP();
-
     bool isStopped();
 
     // Reads to DP WCR toggles the CTRLSEL bit
@@ -38,10 +34,6 @@ class SWDHost {
     void idleShort();
     void idleLong();
 
-    // TODO: Move to private
-    Optional<uint32_t> readFromPacket(uint32_t packet, uint32_t retry_count = 10);
-    bool writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_count = 10);
-
   private:
     SWDDriver *driver;
 
@@ -54,6 +46,11 @@ class SWDHost {
     const uint32_t DEFAULT_SEL_VALUE = 0xbeefcafe;
     uint32_t m_current_banksel = DEFAULT_SEL_VALUE; // Force set on first time
     uint32_t m_current_ctrlsel = DEFAULT_SEL_VALUE; // Force set on first time
+
+    // Powers on the AP module using CTRL_STAT
+    // Additionally waits for the target to 
+    // provide its power up ACKs
+    void initAP();
 
     // Trigger a line reset 
     void resetLine();
@@ -73,7 +70,11 @@ class SWDHost {
     void handleFault();
     void handleError();
 
-    // Unsafe Variants of reading and writing methods
+    // Generic variants for reading and writing to a target
+    Optional<uint32_t> readFromPacket(uint32_t packet, uint32_t retry_count = 10);
+    bool writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_count = 10);
+
+    // Unsafe Generic variants of reading and writing methods
     // Procceeds with the OK flow of control, and returns error values
     // on non OK cases
     Optional<uint32_t> readFromPacketUnsafe(uint32_t packet, ACK *ack = nullptr);
