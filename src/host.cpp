@@ -100,24 +100,20 @@ uint8_t make_packet(swd::AP port, RW access) {
     switch (port) {
         case swd::AP::CSW:
         case swd::AP::DB0:
-            Logger::debug("make_packet: AP CSW/BD0");
             packet |= Ax0;
             break;
         case swd::AP::TAR:
         case swd::AP::DB1:
         case swd::AP::CFG:
-            Logger::debug("make_packet: AP TAR/BD1/CFG");
             packet |= Ax4;
             break;
         case swd::AP::DB2:
         case swd::AP::BASE:
-            Logger::debug("make_packet: AP BD2/BASE");
             packet |= Ax8;
             break;
         case swd::AP::DRW:
         case swd::AP::IDR:
         case swd::AP::DB3:
-            Logger::debug("make_packet: AP DRW/IDR/BD3");
             packet |= AxC;
             break;
         default:
@@ -165,6 +161,7 @@ void SWDHost::reset() {
     m_stop_host = false; 
     resetLine();
     m_ap_power_on = false;
+    setConfigs();
     m_current_banksel = DEFAULT_SEL_VALUE;
     m_current_ctrlsel = DEFAULT_SEL_VALUE;
 }
@@ -178,6 +175,11 @@ inline bool SWDHost::isStopped() {
     return m_stop_host;
 }
 
+void SWDHost::setConfigs() {
+    setDataLengthWord();
+    setAutoIncrementTAR(false);
+}
+
 void SWDHost::initAP() {
     Logger::info("Initializing Access Port");
     if (!(writePort(DP::CTRL_STAT, 0x50000000) && readPort(DP::CTRL_STAT).hasValue())) {
@@ -185,7 +187,12 @@ void SWDHost::initAP() {
         stop();
         return;
     }
+    Logger::info("Access Port Initialized");
     m_ap_power_on = true;
+}
+
+bool SWDHost::APPoweredOn() {
+    return m_ap_power_on;
 }
 
 // Private read and write methods
@@ -196,7 +203,7 @@ Optional<uint32_t> SWDHost::readFromPacketUnsafe(uint32_t packet, ACK *ack) {
     Optional<uint32_t> data = Optional<uint32_t>::none();
 
     if (rd_ack == ACK::OK) {
-        data = Optional<uint32_t>::of(readData());
+        data = readData();
         driver->turnaround();
     }
 
@@ -223,6 +230,10 @@ Optional<uint32_t> SWDHost::readFromPacket(uint32_t packet, uint32_t retry_count
     switch (ack) {
         case ACK::OK: {
             Logger::debug("SWDHost::readFromPacket: ACK = Ok");
+            if (!data.hasValue()) {
+                Logger::info("Resending packet request");
+                return readFromPacket(packet, retry_count-1);
+            } 
             return data;
         }
         case ACK::WAIT:
@@ -267,7 +278,7 @@ bool SWDHost::writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_cou
         return false;
     }
     if (retry_count == 0) {
-        Logger::info("SWDHost::writeFromPacket: Retry Count Exceeded. Exiting...");
+        Logger::info("Retry Count Exceeded. Exiting...");
         return false;
     }
 
@@ -278,6 +289,10 @@ bool SWDHost::writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_cou
         case ACK::OK: 
             Logger::debug("SWDHost::writeFromPacket: ACK = OK");
             // Data was already written by the unsafe method
+            if (writeErrorSet()) {
+                Logger::info("Parity error in write data sent. Resending data");
+                return writeFromPacket(packet, data, retry_count-1);
+            }
             return true;
         case ACK::WAIT:
             Logger::debug("SWDHost::writeFromPacket: ACK = WAIT");
@@ -294,67 +309,53 @@ bool SWDHost::writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_cou
 
 Optional<uint32_t> SWDHost::readPort(DP port) {
     // CTRLSEL needs to be set
-    if (port == DP::WCR) {
-        setCTRLSEL(1);
-    }
+    if (port == DP::WCR) { setCTRLSEL(1); }
     uint8_t packet = make_packet(port, RW::READ);
     Optional<uint32_t> data = readFromPacket(packet, 10);
     // Ensure that CTRL/STAT register is always availible
-    if (port == DP::WCR) {
-       setCTRLSEL(0);
-    }
-    
+    if (port == DP::WCR) { setCTRLSEL(0); }
     return data;
 }
 
 Optional<uint32_t> SWDHost::readPort(AP port) {
-    if (!m_ap_power_on) {
-        initAP();
-    }
+    if (!APPoweredOn()) { initAP(); }
     setAPBANKSEL(port);
     uint8_t packet = make_packet(port, RW::READ);
     Optional<uint32_t> data = readFromPacket(packet, 10);
     // If read was not successfull then return nothing
-    if ( !data.hasValue() ) {
-        return Optional<uint32_t>::none();
-    }
+    if ( !data.hasValue() ) { return Optional<uint32_t>::none(); }
     // Requires another read
     return readPort(DP::RDBUFF);
 }
 
 bool SWDHost::writePort(DP port, uint32_t data) {
     // CTRLSEL needs to be set
-    if (port == DP::WCR) {
-        setCTRLSEL(1);
-    }
+    if (port == DP::WCR) { setCTRLSEL(1); }
     uint8_t packet = make_packet(port, RW::WRITE);
     bool write_success = writeFromPacket(packet, data, 10);
     // Ensure that CTRL/STAT register is always availible
-    if (port == DP::WCR) {
-       setCTRLSEL(0);
-    }
+    if (port == DP::WCR) { setCTRLSEL(0); }
     return write_success;
 }
 
 bool SWDHost::writePort(AP port, uint32_t data) {
-    if (!m_ap_power_on) {
-        initAP();
-    }
+    if (!APPoweredOn()) { initAP(); }
     setAPBANKSEL(port);
     uint8_t packet = make_packet(port, RW::WRITE);
     bool write_success = writeFromPacket(packet, data, 10);
-    // Based on evidence, two short idle periods completes 
-    // the AP transaction
+    // Based on trials, two short idle periods 
+    // completes the AP transaction
     if ( write_success ) {
+        Logger::debug("SWDHost::writePort: Idle delay for AP write");
         idleShort();
         idleShort();
     }
     return write_success;
 }
 
-inline void SWDHost::idleShort() { driver->idleShort(); }
+void SWDHost::idleShort() { driver->idleShort(); }
 
-inline void SWDHost::idleLong() { driver->idleLong(); }
+void SWDHost::idleLong() { driver->idleLong(); }
 
 // private
 
@@ -381,6 +382,23 @@ void SWDHost::updateSELECT() {
     );
 }
 
+void SWDHost::setDataLengthWord() {
+    Optional<uint32_t> csw = Optional<uint32_t>::none();
+    // If the target only supports word tansfers, this doesnt do anything   
+    if ((csw = readPort(AP::CSW)).hasValue() && writePort(AP::CSW, (csw.getValue() & ~0x7) | 0b010)) {
+        Logger::info("Set memory transfers to word");
+        return;
+    }
+    Logger::warn("Faced an issue when setting memory transfers to word");
+}
+
+void SWDHost::setAutoIncrementTAR(bool increment) {
+    Optional<uint32_t> csw = Optional<uint32_t>::none();
+    if ((csw = readPort(AP::CSW)).hasValue()) {
+        writePort(AP::CSW, (csw.getValue() & ~0x18) | (increment << 0x4) ); // AddrInc
+    }
+}
+
 inline void SWDHost::sendPacket(uint8_t packet) { driver->writeBits(packet, 8); }
 
 ACK SWDHost::readACK() {
@@ -398,29 +416,36 @@ ACK SWDHost::readACK() {
     }
 }
 
+bool flip = false;
+
 void SWDHost::writeData(uint32_t data) {
     uint32_t parity = calculate_data_parity(data);
+    if (flip) {
+        Logger::debug("Flipping Parity");
+        parity = ~parity;
+    }
     driver->writeBits(data, 32);
     driver->writeBits(parity, 1);
-    // Serial.printf("SWDHost::writeData: Data Written: 0x%x, parity: 0x%x\n\r", data, parity & 0x1);
 }
 
-uint32_t SWDHost::readData() {
+Optional<uint32_t> SWDHost::readData() {
     uint32_t data = driver->readBits(32);
     uint32_t parity = driver->readBits(1);
     if (calculate_data_parity(data) != parity) {
         Logger::info("Parity error detected in read data received.");
-        // TODO: add retry logic
+        return Optional<uint32_t>::none();
     }
-    // Serial.printf("SWDHost::readData: Data Read: 0x%x, parity: 0x%x\n\r", data, parity);
-    return data;
+    return Optional<uint32_t>::of(data);
+}
+
+inline bool SWDHost::writeErrorSet() {
+    return (bool) (readPort(DP::CTRL_STAT).getValue() & 0x80);
 }
 
 void SWDHost::handleFault() {
     // Cases that trigger a fault
     //  - Partiy error in the wdata
-    uint32_t ctrl_stat = readPort(DP::CTRL_STAT).getValue();
-    if (ctrl_stat & 0x80) { // WDATAERR
+    if (writeErrorSet()) { // WDATAERR
         Logger::info("Parity Error in the previous write data sent detected.");
         writePort(DP::ABORT, 0x8); // WDERRCLR
     } else {

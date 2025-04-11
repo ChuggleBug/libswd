@@ -51,6 +51,12 @@ class SWDHost {
     // Additionally waits for the target to 
     // provide its power up ACKs
     void initAP();
+    bool APPoweredOn();
+
+    // Sets up any required configurations for the device
+    void setConfigs();
+    void setDataLengthWord();
+    void setAutoIncrementTAR(bool increment);
 
     // Trigger a line reset 
     void resetLine();
@@ -80,12 +86,16 @@ class SWDHost {
     Optional<uint32_t> readFromPacketUnsafe(uint32_t packet, ACK *ack = nullptr);
     bool writeFromPacketUnsafe(uint32_t packet, uint32_t data, ACK *ack = nullptr);
 
+    // Checks if the previous data write was successful by
+    // checking the CTRL/STAT WDATAERR field
+    bool writeErrorSet();
+
     // Generic flow for the protocol
     // Does not handle sending bits
     void sendPacket(uint8_t packet);
     ACK readACK();
     void writeData(uint32_t data);
-    uint32_t readData();
+    Optional<uint32_t> readData();
 };
 
 } // namespace swd
