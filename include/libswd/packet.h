@@ -8,8 +8,8 @@
 namespace swd {
 
 enum class DP {
-    ABORT,     // 0x0, CTRLSEL = X, RO
-    IDCODE,    // 0x0, CTRLSEL = X, WO
+    ABORT,     // 0x0, CTRLSEL = X, WO
+    IDCODE,    // 0x0, CTRLSEL = X, RO
     CTRL_STAT, // 0x4, CTRLSEL = 0, RW
     WCR,       // 0x4, CTRLSEL = 1, RW
     RESEND,    // 0x8, CTRLSEL = X, RO
@@ -19,16 +19,16 @@ enum class DP {
 };
 
 enum class AP {
-    CSW,  // 0x00
-    TAR,  // 0x04
-    DRW,  // 0x0C
-    DB0,  // 0x10
-    DB1,  // 0x14
-    DB2,  // 0x18
-    DB3,  // 0x1C
-    CFG,  // 0xF4
-    BASE, // 0xF8
-    IDR   // 0xFC
+    CSW,  // 0x00, RW
+    TAR,  // 0x04, RW
+    DRW,  // 0x0C, RW
+    DB0,  // 0x10, RW
+    DB1,  // 0x14, RW
+    DB2,  // 0x18, RW
+    DB3,  // 0x1C, RW
+    CFG,  // 0xF4, RO
+    BASE, // 0xF8, RO
+    IDR   // 0xFC, RO
 };
 
 } // namespace swd
