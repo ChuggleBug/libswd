@@ -14,9 +14,14 @@
 // Defines debug and access port options
 #include "packet.h"
 
-// Main Host Library
+// SWJ-DP Library
 // Allows communication to the target
 // requires a driver to send signals
-#include "host.h"
+#include "dap.h"
+
+// Logging utility
+// Provides simple serial output which 
+// can be used anywhere by the library
+#include "logger.h"
 
 #endif // __LIBSWD_H
