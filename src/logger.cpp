@@ -1,4 +1,7 @@
 
+#include <stdarg.h>
+#include <stdio.h>
+
 #include "libswd/logger.h"
 
 // Static member intializations
@@ -33,30 +36,46 @@ void Logger::setNewline(const char *str) {
     Logger::newline = str;
 }
 
-
-void Logger::debug(const char* str) {
-    if (writeAtLevel(LogLevel::DEBUG)) {
-        writeLine(log_level_str[0], str);
-    }
+void Logger::debug(const char* fmt, ...) {
+    if (!writeAtLevel(LogLevel::DEBUG)) return;
+    char buffer[256];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+    writeLine(log_level_str[0], buffer);
 }
 
-void Logger::info(const char* str) {
-    if (writeAtLevel(LogLevel::INFO)) {
-        writeLine(log_level_str[1], str);
-    }
+void Logger::info(const char* fmt, ...) {
+    if (!writeAtLevel(LogLevel::INFO)) return;
+    char buffer[256];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+    writeLine(log_level_str[1], buffer);
 }
 
-void Logger::warn(const char* str) {
-    if (writeAtLevel(LogLevel::WARN)) {
-        writeLine(log_level_str[2], str);
-    }
+void Logger::warn(const char* fmt, ...) {
+    if (!writeAtLevel(LogLevel::WARN)) return;
+    char buffer[256];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+    writeLine(log_level_str[2], buffer);
 }
 
-void Logger::error(const char* str) {
-    if (writeAtLevel(LogLevel::ERROR)) {
-        writeLine(log_level_str[3], str);
-    }
+void Logger::error(const char* fmt, ...) {
+    if (!writeAtLevel(LogLevel::ERROR)) return;
+    char buffer[256];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+    writeLine(log_level_str[3], buffer);
 }
+
 
 void Logger::writeLine(const char *level_str, const char *str) {
     logger->write(level_str);

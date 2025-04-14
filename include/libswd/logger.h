@@ -1,4 +1,6 @@
 
+#ifndef __LOGGER_H
+#define __LOGGER_H
 
 enum class LogLevel {
     DEBUG = 10,
@@ -20,10 +22,10 @@ class Logger {
 
     static void setNewline(const char *str);
 
-    static void debug(const char *str);
-    static void info(const char *str);
-    static void warn(const char *str);
-    static void error(const char *str);
+    static void debug(const char* fmt, ...);
+    static void info(const char* fmt, ...);
+    static void warn(const char* fmt, ...);
+    static void error(const char* fmt, ...);
 
   private:
 
@@ -43,3 +45,4 @@ class Logger {
     virtual void flush() {}
 };
 
+#endif // __LOGGER_H
