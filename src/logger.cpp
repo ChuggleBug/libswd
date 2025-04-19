@@ -12,32 +12,22 @@ const char *Logger::newline = "\n\r";
 static Logger *logger;
 
 // Mostly here to make it easier to see alignment
-static const char *log_level_str[4] = {
-    "[DEBUG]",
-    "[INFO ]",
-    "[WARN ]",
-    "[ERROR]"
-};
+static const char *log_level_str[4] = {"[DEBUG]", "[INFO ]", "[WARN ]", "[ERROR]"};
 
-void Logger::setLogger(Logger *l) { 
+void Logger::setLogger(Logger *l) {
     logger = l;
     Logger::logger_set = true;
 }
 
-bool Logger::isSet() {
-    return Logger::logger_set;
-}
+bool Logger::isSet() { return Logger::logger_set; }
 
-void Logger::setLogLevel(LogLevel level) {
-    Logger::level = level;
-}
+void Logger::setLogLevel(LogLevel level) { Logger::level = level; }
 
-void Logger::setNewline(const char *str) {
-    Logger::newline = str;
-}
+void Logger::setNewline(const char *str) { Logger::newline = str; }
 
-void Logger::debug(const char* fmt, ...) {
-    if (!writeAtLevel(LogLevel::DEBUG)) return;
+void Logger::debug(const char *fmt, ...) {
+    if (!writeAtLevel(LogLevel::DEBUG))
+        return;
     char buffer[256];
     va_list args;
     va_start(args, fmt);
@@ -46,8 +36,9 @@ void Logger::debug(const char* fmt, ...) {
     writeLine(log_level_str[0], buffer);
 }
 
-void Logger::info(const char* fmt, ...) {
-    if (!writeAtLevel(LogLevel::INFO)) return;
+void Logger::info(const char *fmt, ...) {
+    if (!writeAtLevel(LogLevel::INFO))
+        return;
     char buffer[256];
     va_list args;
     va_start(args, fmt);
@@ -56,8 +47,9 @@ void Logger::info(const char* fmt, ...) {
     writeLine(log_level_str[1], buffer);
 }
 
-void Logger::warn(const char* fmt, ...) {
-    if (!writeAtLevel(LogLevel::WARN)) return;
+void Logger::warn(const char *fmt, ...) {
+    if (!writeAtLevel(LogLevel::WARN))
+        return;
     char buffer[256];
     va_list args;
     va_start(args, fmt);
@@ -66,8 +58,9 @@ void Logger::warn(const char* fmt, ...) {
     writeLine(log_level_str[2], buffer);
 }
 
-void Logger::error(const char* fmt, ...) {
-    if (!writeAtLevel(LogLevel::ERROR)) return;
+void Logger::error(const char *fmt, ...) {
+    if (!writeAtLevel(LogLevel::ERROR))
+        return;
     char buffer[256];
     va_list args;
     va_start(args, fmt);
@@ -75,7 +68,6 @@ void Logger::error(const char* fmt, ...) {
     va_end(args);
     writeLine(log_level_str[3], buffer);
 }
-
 
 void Logger::writeLine(const char *level_str, const char *str) {
     logger->write(level_str);
