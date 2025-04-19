@@ -1,11 +1,11 @@
-// packet.h
+// port.h
 
-#ifndef __SWD_PACKET_H
-#define __SWD_PACKET_H
+#ifndef __SWD_PORT_H
+#define __SWD_PORT_H
 
 #include <stdint.h>
 
-namespace swd {
+namespace swd::dap {
 
 enum class DP {
     ABORT,     // 0x0, CTRLSEL = X, WO
@@ -31,6 +31,6 @@ enum class AP {
     IDR   // 0xFC, RO
 };
 
-} // namespace swd
+} // namespace swd::dap
 
-#endif // __SWD_PACKET_H
+#endif // __SWD_PORT_H
