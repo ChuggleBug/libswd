@@ -12,8 +12,7 @@ enum class LogLevel {
 
 class Logger {
 
-  public: 
-
+  public:
     static void setLogger(Logger *logger);
 
     static bool isSet();
@@ -22,22 +21,20 @@ class Logger {
 
     static void setNewline(const char *str);
 
-    static void debug(const char* fmt, ...);
-    static void info(const char* fmt, ...);
-    static void warn(const char* fmt, ...);
-    static void error(const char* fmt, ...);
+    static void debug(const char *fmt, ...);
+    static void info(const char *fmt, ...);
+    static void warn(const char *fmt, ...);
+    static void error(const char *fmt, ...);
 
   private:
-
-    static LogLevel level; // = LogLevel::None
-    static bool logger_set; // = false
+    static LogLevel level;      // = LogLevel::None
+    static bool logger_set;     // = false
     static const char *newline; // = \n\r
 
     static void writeLine(const char *level_str, const char *str);
     static bool writeAtLevel(LogLevel level);
 
   protected:
-
     // Does not write the newline character
     virtual void write(const char *str) = 0;
 
