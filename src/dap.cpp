@@ -1,9 +1,11 @@
 #include "libswd/dap.h"
 #include "libswd/logger.h"
 #include "libswd/optional.h"
-#include "libswd/packet.h"
+#include "libswd/port.h"
 
 namespace { // anonymous
+
+using namespace swd::dap;
 
 constexpr uint8_t PACKET_BASE = 0x81;
 constexpr uint8_t DP_Port = 0x0;
@@ -35,58 +37,66 @@ void set_packet_parity(uint8_t *packet) {
     *packet = (*packet & ~0x20) | ((parity & 1) << 5);
 }
 
-uint8_t make_packet(swd::DP port, RW access) {
+uint8_t make_packet(DP port, RW access) {
 
     uint8_t packet = PACKET_BASE | DP_Port | static_cast<uint8_t>(access);
 
     // Mostly for debugging
     if (Logger::isSet()) {
         switch (port) {
-        case swd::DP::ABORT:
+        case DP::ABORT:
             Logger::debug("make_packet: DP ABORT");
             break;
-        case swd::DP::IDCODE:
+        case DP::IDCODE:
             Logger::debug("make_packet: DP IDCODE");
             break;
-        case swd::DP::CTRL_STAT:
+        case DP::CTRL_STAT:
             Logger::debug("make_packet: DP CTRL/STAT");
             break;
-        case swd::DP::WCR:
+        case DP::WCR:
             Logger::debug("make_packet: DP WCR");
             break;
-        case swd::DP::RESEND:
+        case DP::RESEND:
             Logger::debug("make_packet: DP RESEND");
             break;
-        case swd::DP::SELECT:
+        case DP::SELECT:
             Logger::debug("make_packet: DP SELECT");
             break;
-        case swd::DP::RDBUFF:
+        case DP::RDBUFF:
             Logger::debug("make_packet: DP RDBUFF");
             break;
-        case swd::DP::ROUTESEL:
+        case DP::ROUTESEL:
             Logger::debug("make_packet: DP ROUTESEL");
             break;
         default:
             Logger::warn("Unknown debug port");
             break;
         }
+        switch (access) {
+        case RW::READ:
+            Logger::debug("make_packet: READ");
+            break;
+        case RW::WRITE:
+            Logger::debug("make_packet: WRITE");
+            break;
+        }
     }
 
     switch (port) {
-    case swd::DP::ABORT:
-    case swd::DP::IDCODE:
+    case DP::ABORT:
+    case DP::IDCODE:
         packet |= Ax0;
         break;
-    case swd::DP::CTRL_STAT:
-    case swd::DP::WCR:
+    case DP::CTRL_STAT:
+    case DP::WCR:
         packet |= Ax4;
         break;
-    case swd::DP::RESEND:
-    case swd::DP::SELECT:
+    case DP::RESEND:
+    case DP::SELECT:
         packet |= Ax8;
         break;
-    case swd::DP::RDBUFF:
-    case swd::DP::ROUTESEL:
+    case DP::RDBUFF:
+    case DP::ROUTESEL:
         packet |= AxC;
         break;
     default:
@@ -96,64 +106,72 @@ uint8_t make_packet(swd::DP port, RW access) {
     return packet;
 }
 
-uint8_t make_packet(swd::AP port, RW access) {
+uint8_t make_packet(AP port, RW access) {
     uint8_t packet = PACKET_BASE | AP_Port | static_cast<uint8_t>(access);
 
     if (Logger::isSet()) {
         switch (port) {
-        case swd::AP::CSW:
+        case AP::CSW:
             Logger::debug("make_packet: AP CSW");
             break;
-        case swd::AP::DB0:
+        case AP::DB0:
             Logger::debug("make_packet: AP DB0");
             break;
-        case swd::AP::TAR:
+        case AP::TAR:
             Logger::debug("make_packet: AP TAR");
             break;
-        case swd::AP::DB1:
+        case AP::DB1:
             Logger::debug("make_packet: AP DB1");
             break;
-        case swd::AP::CFG:
+        case AP::CFG:
             Logger::debug("make_packet: AP CFG");
             break;
-        case swd::AP::DB2:
+        case AP::DB2:
             Logger::debug("make_packet: AP DB2");
             break;
-        case swd::AP::BASE:
+        case AP::BASE:
             Logger::debug("make_packet: AP BASE");
             break;
-        case swd::AP::DRW:
+        case AP::DRW:
             Logger::debug("make_packet: AP DRW");
             break;
-        case swd::AP::IDR:
+        case AP::IDR:
             Logger::debug("make_packet: AP IDR");
             break;
-        case swd::AP::DB3:
+        case AP::DB3:
             Logger::debug("make_packet: AP BD3");
             break;
         default:
             Logger::warn("Unknown access port");
             break;
         }
+        switch (access) {
+        case RW::READ:
+            Logger::debug("make_packet: READ");
+            break;
+        case RW::WRITE:
+            Logger::debug("make_packet: WRITE");
+            break;
+        }
     }
 
     switch (port) {
-    case swd::AP::CSW:
-    case swd::AP::DB0:
+    case AP::CSW:
+    case AP::DB0:
         packet |= Ax0;
         break;
-    case swd::AP::TAR:
-    case swd::AP::DB1:
-    case swd::AP::CFG:
+    case AP::TAR:
+    case AP::DB1:
+    case AP::CFG:
         packet |= Ax4;
         break;
-    case swd::AP::DB2:
-    case swd::AP::BASE:
+    case AP::DB2:
+    case AP::BASE:
         packet |= Ax8;
         break;
-    case swd::AP::DRW:
-    case swd::AP::IDR:
-    case swd::AP::DB3:
+    case AP::DRW:
+    case AP::IDR:
+    case AP::DB3:
         packet |= AxC;
         break;
     default:
@@ -163,20 +181,20 @@ uint8_t make_packet(swd::AP port, RW access) {
     return packet;
 }
 
-uint32_t getAPBANK(swd::AP port) {
+uint32_t getAPBANK(AP port) {
     switch (port) {
-    case swd::AP::CSW:
-    case swd::AP::TAR:
-    case swd::AP::DRW:
+    case AP::CSW:
+    case AP::TAR:
+    case AP::DRW:
         return 0x00;
-    case swd::AP::DB0:
-    case swd::AP::DB1:
-    case swd::AP::DB2:
-    case swd::AP::DB3:
+    case AP::DB0:
+    case AP::DB1:
+    case AP::DB2:
+    case AP::DB3:
         return 0x10;
-    case swd::AP::CFG:
-    case swd::AP::BASE:
-    case swd::AP::IDR:
+    case AP::CFG:
+    case AP::BASE:
+    case AP::IDR:
         return 0xF0;
     default:
         return 0xF0;
@@ -203,20 +221,26 @@ void DAP::reset() {
     m_stop_host = false;
     resetLine();
     m_ap_power_on = false;
-    setConfigs();
     m_current_banksel = DEFAULT_SEL_VALUE;
     m_current_ctrlsel = DEFAULT_SEL_VALUE;
+    // Check endianess
+    // CFG is readonly and cannot be changed
+    m_is_little_endian = readPort(AP::CFG).map<bool>([](uint32_t cfg) { return (cfg & 0x1) == 0; },
+                                                     true); // Is most likely true
+    setConfigs();
 }
 
-inline void DAP::stop() {
+void DAP::stop() {
     Logger::error("Host cannot connect to target. Stopping...");
     m_stop_host = true;
 }
 
-inline bool DAP::isStopped() { return m_stop_host; }
+bool DAP::isStopped() { return m_stop_host; }
+
+bool DAP::isTargetLittleEndian() { return m_is_little_endian; }
 
 void DAP::setConfigs() {
-    setDataLengthWord();
+    setDataLengthByte();
     setAutoIncrementTAR(false);
 }
 
@@ -262,6 +286,7 @@ Optional<uint32_t> DAP::readFromPacket(uint32_t packet, uint32_t retry_count) {
         return Optional<uint32_t>::none();
     }
 
+    Logger::debug("DAP::readFromPacket: packet = 0x%x", packet);
     ACK ack;
     Optional<uint32_t> data = readFromPacketUnsafe(packet, &ack);
 
@@ -272,6 +297,7 @@ Optional<uint32_t> DAP::readFromPacket(uint32_t packet, uint32_t retry_count) {
             Logger::info("Resending packet request");
             return readFromPacket(packet, retry_count - 1);
         }
+        Logger::debug("DAP::readFromPacket: data = 0x%x", data);
         return data;
     }
     case ACK::WAIT:
@@ -318,6 +344,7 @@ bool DAP::writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_count) 
         return false;
     }
 
+    Logger::debug("DAP::writeFromPacket: packet = 0x%x, data = 0x%08x", packet, data);
     ACK ack;
     writeFromPacketUnsafe(packet, data, &ack);
 
@@ -325,7 +352,7 @@ bool DAP::writeFromPacket(uint32_t packet, uint32_t data, uint32_t retry_count) 
     case ACK::OK:
         Logger::debug("DAP::writeFromPacket: ACK = OK");
         // Data was already written by the unsafe method
-        if (writeErrorSet()) {
+        if (writeDataErrSet()) {
             Logger::info("Parity error in write data sent. Resending data");
             return writeFromPacket(packet, data, retry_count - 1);
         }
@@ -363,13 +390,16 @@ Optional<uint32_t> DAP::readPort(AP port) {
     }
     setAPBANKSEL(port);
     uint8_t packet = make_packet(port, RW::READ);
-    Optional<uint32_t> data = readFromPacket(packet, 10);
-    // If read was not successfull then return nothing
-    if (!data.hasValue()) {
+    // Read data can be dropped since it won't be
+    // present on initial read
+    readFromPacket(packet, 10);
+    // Requires another read
+    Optional<uint32_t> data = readPort(DP::RDBUFF);
+    // AP experienced and error so RDBUFF is unreliable
+    if (apErr()) {
         return Optional<uint32_t>::none();
     }
-    // Requires another read
-    return readPort(DP::RDBUFF);
+    return data;
 }
 
 bool DAP::writePort(DP port, uint32_t data) {
@@ -393,6 +423,10 @@ bool DAP::writePort(AP port, uint32_t data) {
     setAPBANKSEL(port);
     uint8_t packet = make_packet(port, RW::WRITE);
     bool write_success = writeFromPacket(packet, data, 10);
+    // AP experienced an error
+    if (apErr()) {
+        return false;
+    }
     // Based on trials, two short idle periods
     // completes the AP transaction
     if (write_success) {
@@ -430,22 +464,55 @@ void DAP::updateSELECT() {
                               (m_current_ctrlsel == DEFAULT_SEL_VALUE ? 0x00 : m_current_ctrlsel));
 }
 
-void DAP::setDataLengthWord() {
+// Mostly for convenience
+// Write to some bits in CSW
+static bool writeCSWBits(DAP &dap, uint32_t bits, uint32_t mask) {
     Optional<uint32_t> csw = Optional<uint32_t>::none();
-    // If the target only supports word tansfers, this doesnt do anything
-    if ((csw = readPort(AP::CSW)).hasValue() &&
-        writePort(AP::CSW, (csw.getValue() & ~0x7) | 0b010)) {
-        Logger::info("Set memory transfers to word");
-        return;
+    if ((csw = dap.readPort(AP::CSW)).hasValue() &&
+        dap.writePort(AP::CSW, (csw.getValue() & (~mask)) | bits)) {
+        return true;
     }
-    Logger::warn("Faced an issue when setting memory transfers to word");
+    return false;
 }
 
-void DAP::setAutoIncrementTAR(bool increment) {
-    Optional<uint32_t> csw = Optional<uint32_t>::none();
-    if ((csw = readPort(AP::CSW)).hasValue()) {
-        writePort(AP::CSW, (csw.getValue() & ~0x18) | (increment << 0x4)); // AddrInc
+bool DAP::setDataLengthWord() {
+    if (m_data_size == 4) {
+        return true;
     }
+    if (writeCSWBits(*this, 0b010, 0x7)) {
+        Logger::info("Set memory transfers to word");
+        m_data_size = 4;
+        return true;
+    }
+    Logger::warn("Faced an issue when setting memory transfers to word");
+    return false;
+}
+
+bool DAP::setDataLengthByte() {
+    if (m_data_size == 1) {
+        return true;
+    }
+    if (writeCSWBits(*this, 0b000, 0x7)) {
+        Logger::info("Set memory transfers to byte");
+        m_data_size = 1;
+        return true;
+    }
+    Logger::warn("Faced an issue when setting memory transfers to byte");
+    return false;
+}
+
+bool DAP::setAutoIncrementTAR(bool increment) {
+    uint32_t bits = increment ? 0x10 : 0x00;
+    if (bits == m_addr_int_bits) {
+        return true;
+    }
+    if (writeCSWBits(*this, bits, 0x30)) {
+        Logger::info("Updated AddrInc to 0x%02x", bits);
+        m_addr_int_bits = bits;
+        return true;
+    }
+    Logger::warn("Was not able to update AddrInc");
+    return false;
 }
 
 inline void DAP::sendPacket(uint8_t packet) { driver->writeBits(packet, 8); }
@@ -465,12 +532,13 @@ ACK DAP::readACK() {
     }
 }
 
+// Testing purposes
 bool flip = false;
 
 void DAP::writeData(uint32_t data) {
     uint32_t parity = calculate_data_parity(data);
     if (flip) {
-        Logger::debug("Flipping Parity");
+        Logger::debug("DAP::writeData: Flipping Parity");
         parity = ~parity;
     }
     driver->writeBits(data, 32);
@@ -487,16 +555,35 @@ Optional<uint32_t> DAP::readData() {
     return Optional<uint32_t>::of(data);
 }
 
-inline bool DAP::writeErrorSet() { return (bool)(readPort(DP::CTRL_STAT).getValue() & 0x80); }
+inline bool DAP::writeDataErrSet() {
+    uint32_t data = readPort(DP::CTRL_STAT).getValue();
+    return (bool)(data & 0x80);
+}
+
+bool DAP::apErr() {
+    if (m_ap_err) {
+        Logger::info("AP error detected");
+        m_ap_err = false;
+        return true;
+    }
+    return false;
+}
 
 void DAP::handleFault() {
     // Cases that trigger a fault
     //  - Partiy error in the wdata
-    if (writeErrorSet()) { // WDATAERR
-        Logger::info("Parity Error in the previous write data sent detected.");
+    //  - Error in AP transaction
+    uint32_t ctrl_stat = readPort(DP::CTRL_STAT).getValue(); // Cant issue fault
+    Logger::debug("DAP::handleFault: CTRL/STAT = 0x%08x", ctrl_stat);
+    if (ctrl_stat & 0x80) { // WDATAERR
+        Logger::warn("Parity Error in the previous write data sent detected.");
         writePort(DP::ABORT, 0x8); // WDERRCLR
+    } else if (ctrl_stat & 0x20) { // STICKYERR
+        Logger::info("Error in the previous in the AP transcation");
+        writePort(DP::ABORT, 0x4); // STKERRCLR
+        m_ap_err = true;
     } else {
-        Logger::info("Detected Fault. Left unhandlded");
+        Logger::warn("Detected Fault. Left unhandlded");
     }
 }
 
@@ -507,13 +594,13 @@ void DAP::handleError() {
     // should be expected to check and see if the target exists at all
     driver->turnaround();
     if (readFromPacketUnsafe(make_packet(DP::IDCODE, RW::READ)).hasValue()) {
-        Logger::info("Error handler target resynced. Packet dropped");
+        Logger::info("Target resynced after error. Packet dropped");
         return;
     }
 
     // Reset line and reread again
     resetLine();
-    Logger::warn("Error handler target line reset. Testing Read");
+    Logger::warn("Resetting line due to an potentially out of sync DAP");
 
     if (!readFromPacketUnsafe(make_packet(DP::IDCODE, RW::READ)).hasValue()) {
         Logger::error("Was not able to read from target");

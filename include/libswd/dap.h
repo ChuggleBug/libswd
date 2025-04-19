@@ -1,10 +1,10 @@
 
-#ifndef __SWD_HOST_H
-#define __SWD_HOST_H
+#ifndef __SWD_DAP_H
+#define __SWD_DAP_H
 
 #include "driver.h"
 #include "optional.h"
-#include "packet.h"
+#include "port.h"
 
 namespace swd::dap {
 
@@ -12,7 +12,7 @@ enum class ACK;
 
 class DAP {
   public:
-    DAP(SWDDriver *d) : driver(d) {}
+    explicit DAP(SWDDriver *d) : driver(d) {}
     ~DAP() {}
 
     // Stops host from being able to send packets
@@ -21,7 +21,9 @@ class DAP {
     // Resets the host to its initial state
     void reset();
 
-    bool isStopped();
+    // Status checking
+    bool isStopped();            // if dap is stopped
+    bool isTargetLittleEndian(); // if target is little endian
 
     // Reads to DP WCR toggles the CTRLSEL bit
     Optional<uint32_t> readPort(DP port);
@@ -34,12 +36,23 @@ class DAP {
     void idleShort();
     void idleLong();
 
+    // Configurations for the DAP
+    // Presets are handled by setConfigs
+    // but can be changed later
+    bool setDataLengthWord();
+    bool setDataLengthByte();
+    bool setAutoIncrementTAR(bool increment);
+
   private:
     SWDDriver *driver;
 
     // Host/Target flags
     bool m_stop_host = false;   // Target has some unrecoverable error and host needs to be stopped
     bool m_ap_power_on = false; // Target's AP port is powered on
+    bool m_ap_err = false;      // Triggered in the event that the AP had an error or aborted
+    bool m_is_little_endian = true; // Is little endain in most cases, but check either way
+    uint8_t m_data_size = -1;       // Width of data transfers specified by CSW.Size
+    uint8_t m_addr_int_bits = -1;   // Bits assigned to CSW.AddrInc
 
     // BANKSEL and CTRLSEL bits
     // Used to prevent repetitive reads and writes to the target
@@ -53,10 +66,12 @@ class DAP {
     void initAP();
     bool APPoweredOn();
 
+    // Check if the AP has an error
+    // clears the error flag if set
+    bool apErr();
+
     // Sets up any required configurations for the device
     void setConfigs();
-    void setDataLengthWord();
-    void setAutoIncrementTAR(bool increment);
 
     // Trigger a line reset
     void resetLine();
@@ -88,7 +103,7 @@ class DAP {
 
     // Checks if the previous data write was successful by
     // checking the CTRL/STAT WDATAERR field
-    bool writeErrorSet();
+    bool writeDataErrSet();
 
     // Generic flow for the protocol
     // Does not handle sending bits
@@ -100,4 +115,4 @@ class DAP {
 
 } // namespace swd::dap
 
-#endif // __SWD_HOST_H
+#endif // __SWD_DAP_H
