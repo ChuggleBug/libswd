@@ -12,15 +12,20 @@
 
 // Utility Port Declarations
 // Defines debug and access port options
-#include "packet.h"
+// #include "port.h"
 
 // SWJ-DP Library
 // Allows communication to the target
 // requires a driver to send signals
 #include "dap.h"
 
+// High level debugger library
+// Provides the minimal requirements for
+// a software debugger
+#include "host.h"
+
 // Logging utility
-// Provides simple serial output which 
+// Provides simple serial output which
 // can be used anywhere by the library
 #include "logger.h"
 
