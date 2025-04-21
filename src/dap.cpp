@@ -507,7 +507,7 @@ bool DAP::setAutoIncrementTAR(bool increment) {
         return true;
     }
     if (writeCSWBits(*this, bits, 0x30)) {
-        Logger::info("Updated AddrInc to 0x%02x", bits);
+        Logger::info("%sabled AddrInc", increment ? "En" : "Dis");
         m_addr_int_bits = bits;
         return true;
     }
