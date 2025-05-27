@@ -56,7 +56,7 @@ class DAP {
 
     // BANKSEL and CTRLSEL bits
     // Used to prevent repetitive reads and writes to the target
-    const uint32_t DEFAULT_SEL_VALUE = 0xbeefcafe;
+    static const uint32_t DEFAULT_SEL_VALUE = 0xbeefcafe;
     uint32_t m_current_banksel = DEFAULT_SEL_VALUE; // Force set on first time
     uint32_t m_current_ctrlsel = DEFAULT_SEL_VALUE; // Force set on first time
 

@@ -16,8 +16,8 @@ namespace target {
 class SWDHost {
   public:
 
-    explicit SWDHost(SWDDriver *driver) : m_dap(dap::DAP(driver)) {}
-    ~SWDHost() {}
+    explicit SWDHost(SWDDriver *driver);
+    ~SWDHost();
 
     // Host Operations
     /**
@@ -171,18 +171,29 @@ class SWDHost {
     // Code comparison operations
     bool addBreakpoint(uint32_t addr);
     bool removeBreakpoint(uint32_t addr);
+    // Returns the address of all breakpoints, both enabled and disabled
     uint32_t getBreakpoints(uint32_t *bkpts);
+    bool containsBreakpoint(uint32_t addr);
+    bool enableBreakpoint(uint32_t addr, bool trigger);
 
     // Literal Address Comparisons
     bool setRemapAddress(uint32_t addr);
-    bool getRemapAddress(uint32_t addr);
-    bool removeRemapAddress(uint32_t addr);
+    bool resetRemapAddress();
+    Optional<uint32_t> getRemapAddress();
+
     bool addRemapComparator(uint32_t addr);
     bool removeRemapComparator(uint32_t addr);
     uint32_t getRemapComparators(uint32_t *remaps);
+    bool containsRemapComparator(uint32_t addr);
+    bool enableRemalComparator(uint32_t addr, bool trigger);
 
   private:
     static const uint32_t DEFAULT_RETRY_COUNT = 10;
+
+    // Max allowable instruction and 
+    // literal address comparators
+    static constexpr uint32_t MAX_CODE_CMP = 127;
+    static constexpr uint32_t MAX_LIT_CMP = 15;
 
     bool m_host_stopped = false;
 
@@ -192,34 +203,28 @@ class SWDHost {
     target::FBP_VER m_fbv_version;
     bool m_supports_fp = false;
 
-    // Max allowable instruction and 
-    // literal address comparators
-    static const uint32_t MAX_CODE_CMP = 127;
-    static const uint32_t MAX_LIT_CMP = 15;
-
     // Number of implemented instruction and 
     // literal address comparators
     uint32_t m_num_code_cmp = 0;
     uint32_t m_num_lit_cmp = 0;
 
     // Number of breakpoints set
+    // becuase a code comparator can map to two addresses
+    // this value can be different than the number 
+    // of set comparators
     uint32_t m_num_bkpt = 0;
 
-    // Bit string representing all comparator addresses set
-    // Needs to store enough bits to refer to the most
-    // amount of comparators
+    uint32_t m_code_cmp[MAX_CODE_CMP];
+    uint32_t m_lit_cmp[MAX_LIT_CMP];
 
-    // Index 0 bit 0 represents 0th comparator
-    // Index 1 bit 0 represents 64th comparator
-    uint64_t m_set_code_cmps[2] = {0,0};
-    // Bit 0 represents 0th comparator
-    uint16_t m_set_lit_cmps = 0;
 
     void readFBPConfigs();
+    void resetFPComparators();
 
-    Optional<uint32_t> getBkptCmpAddr(uint32_t addr);
+    int32_t getBreakpointIndex(uint32_t addr);
+    int32_t getFPComparatorIndex(uint32_t addr);
 };
 
 } // namespace swd
 
-#endif // __SWD_HOST_h
+#endif // __SWD_HOST_H
