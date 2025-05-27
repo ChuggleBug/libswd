@@ -348,7 +348,7 @@ void SWDHost::resetFPComparators() {
             write_success = memoryWrite(FP_CMP_CODE_BASE, 0x0);
             if (!write_success && --retry_cnt == 0) {
                 Logger::warn("Could not clear FP comparator %d", i);
-                continue;
+                return;
             }
         }
         m_code_cmp[i] = 0x0;
