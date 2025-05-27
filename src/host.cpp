@@ -24,8 +24,8 @@ constexpr uint32_t FP_REMAP = 0xE0002004;
 // of as separate spaces. In doing so, the host is able
 // to remotely handle two "arrays" without the need to store it
 // its own memory
-constexpr uint32_t FP_CMP_CODE_BASE = 0xE0002008;
-constexpr uint32_t FP_CMP_LIT_BASE = 0xE0002204;
+constexpr uint32_t FP_CMP_CODE_BASE = 0xE0002008;   // FP_CMP + 0
+constexpr uint32_t FP_CMP_LIT_BASE = 0xE0002204;    // FP_CMP + 127 bytes
 
 // Constants for convenience
 // DHCSR fields
@@ -57,9 +57,17 @@ constexpr uint32_t KEY = 0x2;
 constexpr uint32_t ENABLE = 0x1;
 
 // FP_REMAP fields
-constexpr uint32_t RMPSPT = 0x10000000;
+constexpr uint32_t RMPSPT = 0x20000000;
+
+// ARMv7-M Memory Reigons
+constexpr uint32_t CODE_BASE_ADDR = 0x0;
+constexpr uint32_t CODE_END_ADDR = 0x1FFFFFFF;
+constexpr uint32_t SRAM_BASE_ADDR = 0x20000000;
+constexpr uint32_t SRAM_END_ADDR = 0x3FFFFFFF;
+
 
 } // namespace
+
 
 namespace swd::target {
 
@@ -70,10 +78,24 @@ enum class FBP_VER : uint32_t {
 
 }
 
+
 namespace swd {
 
 using namespace target;
 using namespace dap;
+
+SWDHost::SWDHost(SWDDriver *driver) 
+: m_dap(dap::DAP(driver)) {
+    // Initalize Bufers
+    for (uint32_t i = 0; i < MAX_CODE_CMP; i++) {
+        m_code_cmp[i] = 0x0;
+    }
+    for (uint32_t i = 0; i < MAX_LIT_CMP; i++) {
+       m_lit_cmp[i] = 0x0;
+    }
+}
+
+SWDHost::~SWDHost() {}
 
 void SWDHost::reset() {
     // Reset DAP
@@ -85,6 +107,7 @@ void SWDHost::reset() {
     }
     // Aquire FPB version
     enableFPB(true);
+    resetFPComparators();
     readFBPConfigs();
 }
 
@@ -99,33 +122,28 @@ bool SWDHost::stepTarget() {
         Logger::warn("Cannot step a non-halted target");
         return false;
     }
-    return enableFPB(false) && memoryWrite(DHCSR, DBG_KEY | C_STEP | C_DEBUGEN) && enableFPB(true);
-
-    // // Measure the change in program counters after the step insturction
-    // // If there is a change, then the program did step. If not
-    // // then there is most likely a breakpoint
-    // Optional<uint32_t> data = registerRead(REG::DebugReturnAddress);
-    // uint32_t curr_pc, next_pc;
-    // if (!data.hasValue()) { return false; }
-    // curr_pc = data.getValue();
-    // // If the program is not at a breakpoint, then the PC will change
-    // // TODO: is there any special cases where this isnt the case?
-    // if (!memoryWrite(DHCSR, DBG_KEY | C_STEP | C_DEBUGEN)) { return false; }
-    // data = registerRead(REG::DebugReturnAddress);
-    // if (!data.hasValue()) { return false; }
-    // next_pc = data.getValue();
     
-    // if (curr_pc != next_pc) {
-    //     return true; // Target did step
-    // }
-    // // Disable the associated breakpoint and then step again
-    // data = getBkptCmpAddr(curr_pc);
-    // if (!data.hasValue()) { return false; }
-    // uint32_t cmp_addr = data.getValue();
-
-
-
-
+    Optional<uint32_t> data = registerRead(REG::DebugReturnAddress);
+    if (!data.hasValue()) { return false; }
+    uint32_t curr_pc = data.getValue();
+    memoryWrite(DHCSR, DBG_KEY | C_STEP | C_DEBUGEN);
+    // Check if there was step
+    data = registerRead(REG::DebugReturnAddress);
+    if (!data.hasValue()) { return false; }
+    uint32_t next_pc = data.getValue();
+    // If there was a change in pc then the program did step
+    if (curr_pc != next_pc) { return true; }
+    Logger::debug("SWDHost::stepTarget: PC did not change. Checking if there is a breakpoint");
+    // If there wasnt, then there might have been a hardware breakpoint
+    // temporarily disable the breakpoint and then 
+    if (containsBreakpoint(curr_pc) && enableBreakpoint(curr_pc, false)) {
+        Logger::debug("SWDHost::stepTarget: Stepping over breakpoint");
+        return memoryWrite(DHCSR, DBG_KEY | C_STEP | C_DEBUGEN) && enableBreakpoint(curr_pc, true);
+    }
+    // In the event where the target is stuck in spin (such as a branch instruction\
+    // jumping to itself), then the inital step was successful
+    // TODO: test this
+    return true;
 }
 
 bool SWDHost::resetTarget() {
@@ -318,7 +336,40 @@ void SWDHost::readFBPConfigs() {
         [](uint32_t data) { return data & RMPSPT; },
         false
     );
+    Logger::info("Flash Patch remap is%s supported", m_supports_fp ? "" : " not");
 }
+
+// Private
+void SWDHost::resetFPComparators() {
+    Logger::info("Restting all FP comparators to 0");
+    for (uint32_t i = 0; i < MAX_CODE_CMP; i++) {
+        bool write_success = false;
+        uint32_t retry_cnt = DEFAULT_RETRY_COUNT;
+        while (!write_success) {
+            // Code comparators and base comparators are next to eachother
+            write_success = memoryWrite(FP_CMP_CODE_BASE, 0x0);
+            if (!write_success && --retry_cnt == 0) {
+                Logger::warn("Could not clear FP comparator %d", i);
+                continue;
+            }
+        }
+        m_code_cmp[i] = 0x0;
+    }
+    for (uint32_t i = 0; i < MAX_LIT_CMP; i++) {
+        bool write_success = false;
+        uint32_t retry_cnt = DEFAULT_RETRY_COUNT;
+        while (!write_success) {
+            // Code comparators and base comparators are next to eachother
+            write_success = memoryWrite(FP_CMP_LIT_BASE, 0x0);
+            if (!write_success && --retry_cnt == 0) {
+                Logger::warn("Could not clear FP comparator %d", i);
+                continue;
+            }
+        }
+        m_lit_cmp[i] = 0x0;
+    }
+}
+
 
 uint32_t SWDHost::getCodeCompCount() {
     return m_num_code_cmp;
@@ -334,42 +385,47 @@ uint32_t SWDHost::getBreakpointCount() {
 
 // Code comparison operations
 bool SWDHost::addBreakpoint(uint32_t addr) {
+    if (addr > CODE_END_ADDR) {
+        Logger::warn("FPBv1 does not support addresses greater than 0x%08x", CODE_END_ADDR);
+        return false;
+    }
     // Get the first availible breakpoint
-    int32_t bit_no = -1;
+    int32_t cmp_no = -1;
     for (uint32_t i = 0; i < m_num_code_cmp; i++) {
-        if (((m_set_code_cmps[i/64] >> (i%64)) & 0x1) == 0x0) {
-            bit_no = i;
+        if ((m_code_cmp[i] & 0x1) == 0x0) {
+            cmp_no = i;
             break;
         }
     }
 
     // bit number was not set 
-    if (bit_no == -1) {
+    if (cmp_no == -1) {
         Logger::warn("Not enough code comparators availible. Did not set 0x%08x", addr);
         return false;
     }
     
-    // Try to write to FP_CODE_CMP{bit_no}
+    // Try to write to FP_CODE_CMP{cmp_no}
     // Needs to convert address to the registers required format
-    uint32_t bkpt_addr = (addr & 0x1FFFFFFC);
+    uint32_t encoded_addr = (addr & 0x1FFFFFFC);
     // set REPLACE
     switch (addr & 0x3)
     {
     case 0b00:
-        bkpt_addr |= 0x40000000;
+        encoded_addr |= 0x40000000;
         m_num_bkpt++;
         break;
     case 0b10:
-        bkpt_addr |= 0x80000000;
+        encoded_addr |= 0x80000000;
         m_num_bkpt++;
         break;
     default:
         Logger::warn("Unable to encode 0x%08x to breakpoint address", addr);
         return false;
     }
-    if (memoryWrite(FP_CMP_CODE_BASE + 4*bit_no, bkpt_addr | ENABLE)) {
-        // Set bit to 1
-        *(m_set_code_cmps + bit_no/64) |= (0x1 << (bit_no%64));
+    encoded_addr |= ENABLE;
+    if (memoryWrite(FP_CMP_CODE_BASE + 4*cmp_no, encoded_addr)) {
+        // Make the value in target and the host match
+        m_code_cmp[cmp_no] = encoded_addr;
         return true;
     }
     Logger::warn("Was not able to write breakpoint address");
@@ -377,7 +433,7 @@ bool SWDHost::addBreakpoint(uint32_t addr) {
 }
 
 // Refer to armv7 architectural reference C1.11.5
-static bool matches_cmp_encoded(uint32_t addr, uint32_t encoded) {
+static bool matches_bkpt_cmp_encoded(uint32_t addr, uint32_t encoded) {
     switch (encoded & 0xC0000000) { // Check REPLACE bits
     case 0x0: // Is a remap address
         return false;
@@ -397,23 +453,16 @@ static bool matches_cmp_encoded(uint32_t addr, uint32_t encoded) {
 bool SWDHost::removeBreakpoint(uint32_t addr) {
     // Need to iterate over every single breakpoint and check
     // if the encoded address matches
-    uint32_t cmps_raw[m_num_code_cmp];
-    if (!memoryReadBlock(FP_CMP_CODE_BASE, cmps_raw, m_num_code_cmp)) {
-        Logger::warn("Was not able to read breakpoints");
-        return false;
-    }
-
     for (uint32_t i = 0; i < m_num_code_cmp; i++) {
-        if ((m_set_code_cmps[i/64] >> (i%64)) & 0x1) {
-            if (matches_cmp_encoded(addr, cmps_raw[i])) {
+        uint32_t encoded_addr = m_code_cmp[i];
+        if (encoded_addr & ENABLE) {
+            if (matches_bkpt_cmp_encoded(addr, encoded_addr)) {
                 // Clear register
                 if (!memoryWrite(FP_CMP_CODE_BASE + 4*i, 0x0)) {
                     Logger::warn("Was not able to clear breakpoint 0x%08x", addr);
                     return false;
                 }
-                switch (cmps_raw[i] & 0xC0000000) {
-                case 0x0:
-                    break;
+                switch (encoded_addr & 0xC0000000) {
                 // When REPLACE is set to 0xC, theres actually two breakpoints
                 // This debug implemntation does not use these types of comparators
                 case 0xC0000000:
@@ -422,8 +471,8 @@ bool SWDHost::removeBreakpoint(uint32_t addr) {
                 case 0x80000000:
                     m_num_bkpt--;
                 }
-                // Unset the associated bit
-                *(m_set_code_cmps + i/64) &= ~(0x1 << (i%64));
+                // Clear the associated index on the host as well
+                m_code_cmp[i] = 0x0;
                 return true;
             }
         }
@@ -435,15 +484,8 @@ bool SWDHost::removeBreakpoint(uint32_t addr) {
 uint32_t SWDHost::getBreakpoints(uint32_t *bkpts) {
     uint32_t bkpt_cnt = 0;
     for (uint32_t i = 0; i < m_num_code_cmp; i++) {
-        // Check if the i'th bit is set
-        // Bit 64+ is located on the second array
-        if ((m_set_code_cmps[i/64] >> (i%64)) & 0x1) {
-            Optional<uint32_t> data = memoryRead(FP_CMP_CODE_BASE + 4*i);
-            if (!data.hasValue()) {
-                Logger::warn("Could not read from code comparator at 0x%08x. Stopping", FP_CMP_CODE_BASE + 4*i);
-                return bkpt_cnt;
-            }
-            uint32_t encoded = data.getValue() & ~ENABLE;
+        uint32_t encoded = m_code_cmp[i];
+        if (encoded & ENABLE) {
             switch (encoded & 0xC0000000) { // Check REPLACE bits
             case 0x0: // Is a remap address
                 Logger::debug("SWDHost::getBreakpoints: Read a literal comparator in code comparator reigon");
@@ -467,34 +509,248 @@ uint32_t SWDHost::getBreakpoints(uint32_t *bkpts) {
     return bkpt_cnt;
 }
 
-
-// Literal Address Comparisons
-bool SWDHost::setRemapAddress(uint32_t addr) {
-
+bool SWDHost::containsBreakpoint(uint32_t addr) {
+    return getBreakpointIndex(addr) != -1;
 }
+
+bool SWDHost::enableBreakpoint(uint32_t addr, bool trigger) {
+    int32_t cmp_index = getBreakpointIndex(addr);
+    if (cmp_index == -1) {
+        Logger::warn("Breakpoint at 0x%08x does not exist", addr);
+        return false;
+    }
+
+    Optional<uint32_t> data = memoryRead(FP_CMP_CODE_BASE + 4*cmp_index);
+    if (!data.hasValue()) {
+        Logger::warn("Could not retrieve breakpoint information");
+        return false;
+    }
+    uint32_t cmp_data = (data.getValue() & ~ENABLE) | (trigger ? ENABLE : 0x0);
+    if (memoryWrite(FP_CMP_CODE_BASE + 4*cmp_index, cmp_data)) {
+        m_code_cmp[cmp_index] = cmp_data;
+        return true;
+    }
+    Logger::warn("Could not write updated breakpoint information");
+    return false;
+}
+
+int32_t SWDHost::getBreakpointIndex(uint32_t addr) {
+    int32_t index = -1;
+    for (uint32_t i = 0; i < m_num_code_cmp; i++) {
+        if (matches_bkpt_cmp_encoded(addr, m_code_cmp[i])) {
+            index = i;
+            break;
+        }
+    }
+    return index;
+}
+
+static inline uint32_t getFPRemapAlignmentMask(uint32_t num_cmps) {
+    // Minimum of 8 word alignment alignment
+    // This bit mask is 32 - 1 = 0x1F
+    uint32_t byte_alignment = num_cmps * 4;
+    if (byte_alignment <= 32) {
+        return 0x1F;
+    }
+    // Get the next highest power of 2
+    // This is supposed to be added by one, but the mask is going to be used
+    byte_alignment--;
+    byte_alignment |= byte_alignment >> 1;   
+    byte_alignment |= byte_alignment >> 2;   
+    byte_alignment |= byte_alignment >> 4;
+    byte_alignment |= byte_alignment >> 8;
+    byte_alignment |= byte_alignment >> 16;
+    return byte_alignment;
+}
+
+
+bool SWDHost::setRemapAddress(uint32_t addr) {
+    if (!m_supports_fp) {
+        Logger::warn("Flash Patch is not supported");
+        return false;
+    }
+    if (addr < SRAM_BASE_ADDR || addr > SRAM_END_ADDR) {
+        Logger::warn("The Flash Patch unit only supports addresses in range (0x%08x - 0x%08x). Did not set 0x%08x", SRAM_BASE_ADDR, SRAM_END_ADDR, addr);
+        return false;
+    }
+    uint32_t remap = addr - SRAM_BASE_ADDR;
+    uint32_t mask = getFPRemapAlignmentMask(m_num_code_cmp + m_num_lit_cmp);
+    if (remap & mask) {
+        Logger::warn("Remap address 0x%08x does not meet alignment requirements of %d bytes", addr, mask+1);
+        return false;
+    }
+
+    return memoryWrite(FP_REMAP, remap & ~(0xE0000000 | mask));
+}
+
+bool SWDHost::resetRemapAddress() {
+    if (!m_supports_fp) {
+        Logger::warn("Flash Patch is not supported");
+        return false;
+    }
+    return memoryWrite(FP_REMAP, 0x0);
+}
+
+Optional<uint32_t> SWDHost::getRemapAddress() {
+    if (!m_supports_fp) {
+        Logger::warn("Flash Patch is not supported");
+        return Optional<uint32_t>::none();
+    }
+    return memoryRead(FP_CTRL).map<Optional<uint32_t>>(
+        [](uint32_t data) {
+            return Optional<uint32_t>::of((data & ~0xE000001F) + SRAM_BASE_ADDR);
+        }, Optional<uint32_t>::none());
+}
+
 
 bool SWDHost::addRemapComparator(uint32_t addr) {
+    if (!m_supports_fp) {
+        Logger::warn("Flash Patch is not supported");
+        return false;
+    }
+    if (addr > CODE_END_ADDR) {
+        Logger::warn("FPBv1 does not support addresses greater than 0x%08x", CODE_END_ADDR);
+        return false;
+    }
+    if (addr & 0x3) {
+        Logger::warn("FPBv1 does not support non word aligned FP remap comparator addresses. Did not set 0x%08x", addr);
+        return false;
+    }
+    
+    // Get the first availible comparator
+    int32_t cmp_no = -1;
+    for (uint32_t i = 0; i < m_num_lit_cmp; i++) {
+        if ((m_lit_cmp[i] & 0x1) == 0x0) {
+            cmp_no = i;
+            break;
+        }
+    }
 
+    // bit number was not set 
+    if (cmp_no == -1) {
+        Logger::warn("Not enough literal comparators availible. Did not set 0x%08x", addr);
+        return false;
+    }
+    
+    // Try to write to FP_LIT_CMP{cmp_no}
+    // Needs to convert address to the registers required format
+    uint32_t encoded_addr = (addr & 0x1FFFFFFC);
+    encoded_addr |= ENABLE;
+    if (memoryWrite(FP_CMP_LIT_BASE + 4*cmp_no, encoded_addr)) {
+        // Make the value in target and the host match
+        m_lit_cmp[cmp_no] = encoded_addr;
+        return true;
+    }
+    Logger::warn("Was not able to write FP comparator address");
+    return false;
+    
 }
 
-bool SWDHost::removeRemapAddress(uint32_t addr) {
+static bool matches_fp_cmp_encoded(uint32_t addr, uint32_t encoded) {
+    return addr == ((encoded * 0x1FFFFFFC) + SRAM_BASE_ADDR);
+}
 
+bool SWDHost::removeRemapComparator(uint32_t addr) {
+    if (!m_supports_fp) {
+        Logger::warn("Flash Patch is not supported");
+        return false;
+    }
+    // Need to iterate over every single comparator and check
+    // if the encoded address matches
+    for (uint32_t i = 0; i < m_num_lit_cmp; i++) {
+        uint32_t encoded_addr = m_lit_cmp[i];
+        if (encoded_addr & ENABLE) {
+            if (matches_fp_cmp_encoded(addr, encoded_addr)) {
+                // Clear register
+                if (!memoryWrite(FP_CMP_CODE_BASE + 4*i, 0x0)) {
+                    Logger::warn("Was not able to clear breakpoint 0x%08x", addr);
+                    return false;
+                }
+                // Unlike breakpoints, one literal comparator can map 
+                // to only one address
+                m_num_lit_cmp--;
+                m_code_cmp[i] = 0x0;
+                return true;
+            }
+        }
+    }
+    Logger::warn("Did not find breakpoint 0x%08x", addr);
+    return false;
 }
 
 uint32_t SWDHost::getRemapComparators(uint32_t *remaps) {
-    uint32_t remap_cnt = 0;
+    if (!m_supports_fp) {
+        Logger::warn("Flash Patch is not supported");
+        return 0;
+    }
+    uint32_t cmp_cnt = 0;
     for (uint32_t i = 0; i < m_num_lit_cmp; i++) {
-        // Check if the i'th bit is set
-        if ((m_set_lit_cmps >> i) & 0x1) {
-            Optional<uint32_t> data = memoryRead(FP_CMP_LIT_BASE + 4*i);
-            if (!data.hasValue()) {
-                Logger::warn("Could not read from comparator at 0x%08x", FP_CMP_LIT_BASE + 4*i);
-                return 0;
+        uint32_t encoded = m_lit_cmp[i];
+        if (encoded & ENABLE) {
+            switch (encoded & 0xC0000000) { // Check REPLACE bits
+            case 0x0:
+                remaps[cmp_cnt++] = (encoded & 0x1FFFFFFC) + SRAM_BASE_ADDR;
+                break;
+            case 0x40000000: 
+            case 0x80000000:
+            case 0xC0000000:
+                Logger::debug("SWDHost::getRemapComparators: Read a breakpoint comparator in the literal comparator reigon");
+                break;
+            default:
+                Logger::debug("SWDHost::getRemapComparators: Unhandled case");
+                break;
             }
-            remaps[remap_cnt++] = data.getValue();
         }
     }
-    return remap_cnt;
+    return cmp_cnt;
 }
+
+bool SWDHost::containsRemapComparator(uint32_t addr) {
+    if (!m_supports_fp) {
+        Logger::warn("Flash Patch is not supported");
+        return false;
+    }
+    return getFPComparatorIndex(addr) != -1;
+}
+
+bool SWDHost::enableRemalComparator(uint32_t addr, bool trigger) {
+    if (!m_supports_fp) {
+        Logger::warn("Flash Patch is not supported");
+        return false;
+    }
+
+    int32_t cmp_index = getBreakpointIndex(addr);
+    if (cmp_index == -1) {
+        Logger::warn("FP Comparator at 0x%08x does not exist", addr);
+        return false;
+    }
+
+    Optional<uint32_t> data = memoryRead(FP_CMP_LIT_BASE+ 4*cmp_index);
+    if (!data.hasValue()) {
+        Logger::warn("Could not retrieve FP comparator information");
+        return false;
+    }
+    uint32_t cmp_data = (data.getValue() & ~ENABLE) | (trigger ? ENABLE : 0x0);
+    if (memoryWrite(FP_CMP_LIT_BASE + 4*cmp_index, cmp_data)) {
+        m_lit_cmp[cmp_index] = cmp_data;
+        return true;
+    }
+    Logger::warn("Could not write updated FP comparator information");
+    return false;
+}
+
+int32_t SWDHost::getFPComparatorIndex(uint32_t addr) {
+    int32_t index = -1;
+    for (uint32_t i = 0; i < m_num_lit_cmp; i++) {
+        if (matches_fp_cmp_encoded(addr, m_lit_cmp[i])) {
+            index = i;
+            break;
+        }
+    }
+    return index;
+}
+
+
+
 
 } // namespace swd
