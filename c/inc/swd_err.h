@@ -6,16 +6,18 @@
 #include "swd_log.h"
 
 #ifdef SWD_DO_RUNTIME_ASSERT
-#define SWD_ASSERT(cond) do { \
-        if (!(cond)) { \
-            SWD_ERROR("Runtime function assertion failed"); \
-            while (1); \
-        } \
-    } while (0) \
+#define SWD_ASSERT(cond)                                                                           \
+    do {                                                                                           \
+        if (!(cond)) {                                                                             \
+            SWD_ERROR("Runtime function assertion failed");                                        \
+            while (1)                                                                              \
+                ;                                                                                  \
+        }                                                                                          \
+    } while (0)
 
 #define SWD_ASSERT_OK(expr) SWD_ASSERT((expr == SWD_OK))
 
-#else 
+#else
 
 #define SWD_ASSERT(cond)
 #define SWD_ASSERT_OK(expr)

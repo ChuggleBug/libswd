@@ -1,29 +1,28 @@
 
-#include <stdlib.h>
-#include <stdio.h> // TODO: remove me later
 #include <stdbool.h>
+#include <stdlib.h>
 
 #include "driver/swd_driver.h"
 #include "swd_err.h"
-
+#include "swd_log.h"
 
 void swd_driver_start(swd_driver_t *driver) {
     if (!driver->started) {
         driver->init();
         driver->started = true;
     } else {
-        printf("Not starting a driver which was previously started");
+        SWD_WARN("Not starting a driver which was previously started");
     }
-} 
+}
 
 void swd_driver_stop(swd_driver_t *driver) {
     if (driver->started) {
         driver->deinit();
         driver->started = false;
     } else {
-        printf("Not stopping a driver which is not stopped");
+        SWD_WARN("Not stopping a driver which is not stopped");
     }
-} 
+}
 
 uint32_t swd_driver_read_bits(swd_driver_t *driver, uint8_t cnt) {
     SWD_ASSERT(driver != NULL);

@@ -2,9 +2,9 @@
 #ifndef __SWD_DAP_PORT_H
 #define __SWD_DAP_PORT_H
 
-#include <stdlib.h>
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
 
 typedef enum _swd_dap_port_t {
     DP_ABORT,     // 0x0, CTRLSEL = X, WO
@@ -33,6 +33,6 @@ bool swd_dap_port_is_AP(swd_dap_port_t port);
 
 uint8_t swd_dap_port_as_packet(swd_dap_port_t port, bool is_read);
 
-const char* swd_dap_port_as_str(swd_dap_port_t port);
+const char *swd_dap_port_as_str(swd_dap_port_t port);
 
 #endif // __SWD_DAP_PORT_H

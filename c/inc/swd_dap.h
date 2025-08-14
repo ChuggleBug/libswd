@@ -6,9 +6,8 @@
 #include <stdint.h>
 
 #include "driver/swd_driver.h"
+#include "swd_dap_port.h"
 #include "swd_err.h"
-#include  "swd_dap_port.h"
-
 
 typedef struct _swd_dap_t {
     swd_driver_t *driver;

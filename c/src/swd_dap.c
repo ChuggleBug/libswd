@@ -3,19 +3,19 @@
 #include <stdlib.h>
 
 #include "driver/swd_driver.h"
+#include "swd_conf.h"
 #include "swd_dap.h"
 #include "swd_err.h"
-#include "swd_conf.h"
 #include "swd_log.h"
 
-#define ACK_OK      (0b001)
-#define ACK_WAIT    (0b010)
-#define ACK_FAULT   (0b100)
+#define ACK_OK (0b001)
+#define ACK_WAIT (0b010)
+#define ACK_FAULT (0b100)
 
 #define DEFAULT_SEL_VALUE (0xbeefcafe)
 #define DEFAULT_CSW_VALUE (-1)
 
-#define RW_RETRY_COUNT    (10)
+#define RW_RETRY_COUNT (10)
 
 static uint8_t get_paity_bit(uint32_t value);
 
@@ -28,8 +28,10 @@ static swd_err_t swd_dap_port_read_ap(swd_dap_t *dap, swd_dap_port_t port, uint3
 static swd_err_t swd_dap_port_write_dp(swd_dap_t *dap, swd_dap_port_t port, uint32_t data);
 static swd_err_t swd_dap_port_write_ap(swd_dap_t *dap, swd_dap_port_t port, uint32_t data);
 
-static swd_err_t swd_dap_port_read_from_packet(swd_dap_t *dap, uint8_t packet, uint32_t *data, uint32_t retry_count);
-static swd_err_t swd_dap_port_write_from_packet(swd_dap_t *dap, uint8_t packet, uint32_t data, uint32_t retry_count);
+static swd_err_t swd_dap_port_read_from_packet(swd_dap_t *dap, uint8_t packet, uint32_t *data,
+                                               uint32_t retry_count);
+static swd_err_t swd_dap_port_write_from_packet(swd_dap_t *dap, uint8_t packet, uint32_t data,
+                                                uint32_t retry_count);
 
 /*
  * Initialization utilities:
@@ -125,12 +127,11 @@ swd_err_t swd_dap_port_read(swd_dap_t *dap, swd_dap_port_t port, uint32_t *data)
 
     SWD_DEBUG("Reading port %s", swd_dap_port_as_str(port));
 
-    if (swd_dap_port_is_DP(port))  {
+    if (swd_dap_port_is_DP(port)) {
         return swd_dap_port_read_dp(dap, port, data);
     } else {
         return swd_dap_port_read_ap(dap, port, data);
     }
-
 }
 
 swd_err_t swd_dap_port_write(swd_dap_t *dap, swd_dap_port_t port, uint32_t data) {
@@ -184,7 +185,7 @@ static swd_err_t swd_dap_port_read_dp(swd_dap_t *dap, swd_dap_port_t port, uint3
         swd_dap_port_read(dap, DP_SELECT, &select_data);
         swd_dap_port_write(dap, DP_SELECT, select_data & 0x1);
     }
-    
+
     return SWD_OK;
 }
 
@@ -212,7 +213,7 @@ static swd_err_t swd_dap_port_write_dp(swd_dap_t *dap, swd_dap_port_t port, uint
         swd_dap_port_read(dap, DP_SELECT, &select_data);
         swd_dap_port_write(dap, DP_SELECT, select_data & 0x1);
     }
-    
+
     return SWD_OK;
 }
 
@@ -220,8 +221,8 @@ static swd_err_t swd_dap_port_write_ap(swd_dap_t *dap, swd_dap_port_t port, uint
     return SWD_OK;
 }
 
-
-static swd_err_t swd_dap_port_read_from_packet(swd_dap_t *dap, uint8_t packet, uint32_t *data, uint32_t retry_count) {
+static swd_err_t swd_dap_port_read_from_packet(swd_dap_t *dap, uint8_t packet, uint32_t *data,
+                                               uint32_t retry_count) {
     if (retry_count == 0) {
         SWD_WARN("Retry count for sending packet exceeded");
         return SWD_ERR;
@@ -241,7 +242,7 @@ static swd_err_t swd_dap_port_read_from_packet(swd_dap_t *dap, uint8_t packet, u
         rd_parity = swd_driver_read_bits(dap->driver, 1);
         swd_driver_turnaround(dap->driver);
     }
-    
+
     switch (ack) {
     case ACK_OK: {
         // Validate parity from rdata
@@ -262,7 +263,8 @@ static swd_err_t swd_dap_port_read_from_packet(swd_dap_t *dap, uint8_t packet, u
     return SWD_ERR;
 }
 
-static swd_err_t swd_dap_port_write_from_packet(swd_dap_t *dap, uint8_t packet, uint32_t data, uint32_t retry_count) {
+static swd_err_t swd_dap_port_write_from_packet(swd_dap_t *dap, uint8_t packet, uint32_t data,
+                                                uint32_t retry_count) {
     if (retry_count == 0) {
         SWD_WARN("Retry count for sending packet exceeded");
         return SWD_ERR;
@@ -305,7 +307,6 @@ static swd_err_t swd_dap_port_write_from_packet(swd_dap_t *dap, uint8_t packet, 
 
     return SWD_ERR;
 }
-
 
 static uint8_t get_paity_bit(uint32_t value) {
     uint8_t parity = 0;
