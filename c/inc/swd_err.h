@@ -3,10 +3,12 @@
 #define __SWD_ERR_H
 
 #include "swd_conf.h"
+#include "swd_log.h"
 
 #ifdef SWD_DO_RUNTIME_ASSERT
 #define SWD_ASSERT(cond) do { \
         if (!(cond)) { \
+            SWD_ERROR("Runtime function assertion failed"); \
             while (1); \
         } \
     } while (0) \

@@ -14,8 +14,7 @@ typedef struct _swd_dap_t {
     swd_driver_t *driver;
     uint8_t data_size;
     uint8_t addr_int_bits;
-    bool host_stopped;
-    bool ap_powered_on;
+    bool is_stopped;
     bool ap_error;
     bool is_little_endian;
     bool current_banksel;
@@ -27,7 +26,7 @@ typedef struct _swd_dap_t {
  */
 void swd_dap_init(swd_dap_t *dap);
 void swd_dap_set_driver(swd_dap_t *dap, swd_driver_t *driver);
-void swd_dap_start(swd_dap_t *dap);
+swd_err_t swd_dap_start(swd_dap_t *dap);
 
 /*
  *
