@@ -1,8 +1,9 @@
 
 #include <stdint.h>
-#include <stdio.h> // TODO: remove me
+#include <stdio.h>
 
 #include "swd_dap_port.h"
+#include "swd_log.h"
 
 // Packet bit constants
 #define PACKET_BASE (0x81)
@@ -85,6 +86,28 @@ uint8_t swd_dap_port_as_packet(swd_dap_port_t port, bool is_read) {
     return packet;
 }
 
+uint32_t swd_dap_port_as_apbanksel_bits(swd_dap_port_t port) {
+    switch (port) {
+    case AP_CSW:
+    case AP_TAR:
+    case AP_DRW:
+        return 0x00;
+    case AP_DB0:
+    case AP_DB1:
+    case AP_DB2:
+    case AP_DB3:
+        return 0x10;
+    case AP_CFG:
+    case AP_BASE:
+    case AP_IDR:
+        return 0xF0;
+    default:
+        SWD_WARN("Invalid port passed to translate to apbanksel. Expected AP, got %s",
+                 swd_dap_port_as_str(port));
+        return SELECT_APBANKSEL_ERR;
+    }
+}
+
 const char *swd_dap_port_as_str(swd_dap_port_t port) {
     switch (port) {
     case DP_ABORT:
@@ -92,7 +115,7 @@ const char *swd_dap_port_as_str(swd_dap_port_t port) {
     case DP_IDCODE:
         return "DP IDCODE";
     case DP_CTRL_STAT:
-        return "DP CTRL_STAT";
+        return "DP CTRL/STAT";
     case DP_WCR:
         return "DP WCR";
     case DP_RESEND:

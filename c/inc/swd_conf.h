@@ -30,4 +30,6 @@
 
 #endif // SWD_ENABLE_LOGGING
 
+#define SWD_DISABLE_UNDEFINED_PORT
+
 #endif // __SWD_CONF_H

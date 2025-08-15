@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define SELECT_APBANKSEL_ERR ((uint32_t)(-1))
+
 typedef enum _swd_dap_port_t {
     DP_ABORT,     // 0x0, CTRLSEL = X, WO
     DP_IDCODE,    // 0x0, CTRLSEL = X, RO
@@ -32,6 +34,7 @@ bool swd_dap_port_is_DP(swd_dap_port_t port);
 bool swd_dap_port_is_AP(swd_dap_port_t port);
 
 uint8_t swd_dap_port_as_packet(swd_dap_port_t port, bool is_read);
+uint32_t swd_dap_port_as_apbanksel_bits(swd_dap_port_t port);
 
 const char *swd_dap_port_as_str(swd_dap_port_t port);
 

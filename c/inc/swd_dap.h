@@ -16,8 +16,6 @@ typedef struct _swd_dap_t {
     bool is_stopped;
     bool ap_error;
     bool is_little_endian;
-    bool current_banksel;
-    bool current_ctrlsel;
 } swd_dap_t;
 
 /*
@@ -25,7 +23,10 @@ typedef struct _swd_dap_t {
  */
 void swd_dap_init(swd_dap_t *dap);
 void swd_dap_set_driver(swd_dap_t *dap, swd_driver_t *driver);
+
 swd_err_t swd_dap_start(swd_dap_t *dap);
+void swd_dap_stop(swd_dap_t *dap);
+void swd_dap_reset(swd_dap_t *dap);
 
 /*
  *
@@ -34,9 +35,6 @@ swd_err_t swd_dap_start(swd_dap_t *dap);
  */
 void swd_dap_set_jtag_to_swd(swd_dap_t *dap);
 void swd_dap_reset_target(swd_dap_t *dap);
-
-void swd_dap_stop(swd_dap_t *dap);
-void swd_dap_reset(swd_dap_t *dap);
 
 swd_err_t swd_dap_port_read(swd_dap_t *dap, swd_dap_port_t port, uint32_t *data);
 swd_err_t swd_dap_port_write(swd_dap_t *dap, swd_dap_port_t port, uint32_t data);
