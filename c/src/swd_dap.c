@@ -195,7 +195,7 @@ swd_err_t swd_dap_port_write(swd_dap_t *dap, swd_dap_port_t port, uint32_t data)
         return SWD_DAP_NOT_STARTED;
     }
 
-    if (!swd_dap_port_is_a_read_port(port)) {
+    if (!swd_dap_port_is_a_write_port(port)) {
         SWD_WARN("Requested port (%s) is not allowed to be written to", swd_dap_port_as_str(port));
         return SWD_DAP_INVALID_PORT_OP;
     }
@@ -306,27 +306,14 @@ static swd_err_t _swd_dap_port_set_banksel(swd_dap_t *dap, swd_dap_port_t port) 
         return SWD_ERR;
     }
 
-    // Read APBANKSEL. only write if a change is needed
-    uint32_t select;
-    if (swd_dap_port_read(dap, DP_SELECT, &select) != SWD_OK) {
-        return SWD_ERR;
-    }
-
-    if (apbanksel != (select & SELECT_APBANKSEL_MASK)) {
-        // Mask out APBANKSEL first, then only consdier CTRLSEL and APBANKSEL
-        select = ((select & ~SELECT_APBANKSEL_MASK) | apbanksel) &
-                 (SELECT_APBANKSEL_MASK | SELECT_CTRLSEL_MASK);
-        return swd_dap_port_write(dap, DP_SELECT, select);
-    }
-    return SWD_OK;
+    uint32_t select = apbanksel & SELECT_APBANKSEL_MASK;
+    return swd_dap_port_write(dap, DP_SELECT, select);
 }
 
 static swd_err_t _swd_dap_port_read_dp(swd_dap_t *dap, swd_dap_port_t port, uint32_t *data) {
     // Need to set CTRLSEL to 1 for DP_WCR
     if (port == DP_WCR) {
-        uint32_t select_data;
-        swd_dap_port_read(dap, DP_SELECT, &select_data);
-        swd_dap_port_write(dap, DP_SELECT, select_data | 0x1);
+        swd_dap_port_write(dap, DP_SELECT, 0x1);
     }
 
     uint8_t packet = swd_dap_port_as_packet(port, true);
@@ -338,9 +325,7 @@ static swd_err_t _swd_dap_port_read_dp(swd_dap_t *dap, swd_dap_port_t port, uint
     // Unset the CTRLSEL bit if needed
     // A second read is needed if SELECT was the port which was written to
     if (port == DP_WCR) {
-        uint32_t select_data;
-        swd_dap_port_read(dap, DP_SELECT, &select_data);
-        swd_dap_port_write(dap, DP_SELECT, select_data & ~0x1);
+        swd_dap_port_write(dap, DP_SELECT, 0x0);
     }
 
     return SWD_OK;
@@ -349,9 +334,7 @@ static swd_err_t _swd_dap_port_read_dp(swd_dap_t *dap, swd_dap_port_t port, uint
 static swd_err_t _swd_dap_port_write_dp(swd_dap_t *dap, swd_dap_port_t port, uint32_t data) {
     // Need to set CTRLSEL to 1 for DP_WCR
     if (port == DP_WCR) {
-        uint32_t select_data;
-        swd_dap_port_read(dap, DP_SELECT, &select_data);
-        swd_dap_port_write(dap, DP_SELECT, select_data | 0x1);
+        swd_dap_port_write(dap, DP_SELECT, 0x1);
     }
 
     uint8_t packet = swd_dap_port_as_packet(port, false);
@@ -363,9 +346,7 @@ static swd_err_t _swd_dap_port_write_dp(swd_dap_t *dap, swd_dap_port_t port, uin
     // Unset the CTRLSEL bit if needed
     // A second read is needed if SELECT was the port which was written to
     if (port == DP_WCR) {
-        uint32_t select_data;
-        swd_dap_port_read(dap, DP_SELECT, &select_data);
-        swd_dap_port_write(dap, DP_SELECT, select_data & ~0x1);
+        swd_dap_port_write(dap, DP_SELECT, 0x0);
     }
 
     return SWD_OK;
