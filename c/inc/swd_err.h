@@ -27,6 +27,16 @@
 typedef enum _swd_err_t {
     SWD_OK = 0,
     SWD_ERR,
+    SWD_DAP_NOT_STARTED,
+    SWD_DAP_INVALID_PORT_OP,
+    SWD_DAP_START_ERR,
+
+#ifdef SWD_DISABLE_UNDEFINED_PORT
+    SWD_DAP_UNDEFINED_PORT,
+#endif // SWD_DISABLE_UNDEFINED_PORT
+
 } swd_err_t;
+
+const char *swd_err_as_str(swd_err_t err);
 
 #endif // __SWD_ERR_H

@@ -32,6 +32,8 @@ typedef enum _swd_dap_port_t {
 
 bool swd_dap_port_is_DP(swd_dap_port_t port);
 bool swd_dap_port_is_AP(swd_dap_port_t port);
+bool swd_dap_port_is_a_read_port(swd_dap_port_t port);
+bool swd_dap_port_is_a_write_port(swd_dap_port_t port);
 
 uint8_t swd_dap_port_as_packet(swd_dap_port_t port, bool is_read);
 uint32_t swd_dap_port_as_apbanksel_bits(swd_dap_port_t port);

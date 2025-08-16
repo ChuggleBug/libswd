@@ -29,12 +29,80 @@ bool swd_dap_port_is_DP(swd_dap_port_t port) {
     case DP_RDBUFF:
     case DP_ROUTESEL:
         return true;
+    case AP_CSW:
+    case AP_TAR:
+    case AP_DRW:
+    case AP_DB0:
+    case AP_DB1:
+    case AP_DB2:
+    case AP_DB3:
+    case AP_CFG:
+    case AP_BASE:
+    case AP_IDR:
+        return false;
     default:
+        SWD_WARN("Port value (%d) is neither an AP or DP", (int)port);
         return false;
     }
 }
 
 bool swd_dap_port_is_AP(swd_dap_port_t port) { return !swd_dap_port_is_DP(port); }
+
+bool swd_dap_port_is_a_read_port(swd_dap_port_t port) {
+    switch (port) {
+    case DP_IDCODE:    // RO
+    case DP_CTRL_STAT: // RW
+    case DP_WCR:       // RW
+    case DP_RESEND:    // RO
+    case DP_RDBUFF:    // RO
+    case AP_CSW:       // RW
+    case AP_TAR:       // RW
+    case AP_DRW:       // RW
+    case AP_DB0:       // RW
+    case AP_DB1:       // RW
+    case AP_DB2:       // RW
+    case AP_DB3:       // RW
+    case AP_CFG:       // RO
+    case AP_BASE:      // RO
+    case AP_IDR:       // RO
+        return true;
+    case DP_ABORT:    // WO
+    case DP_SELECT:   // WO
+    case DP_ROUTESEL: // WO
+        return false;
+    default:
+        SWD_WARN("Port value (%d) is neither a read or a write port", (int)port);
+        return false;
+    }
+}
+
+bool swd_dap_port_is_a_write_port(swd_dap_port_t port) {
+    switch (port) {
+    case DP_ABORT:     // WO
+    case DP_CTRL_STAT: // RW
+    case DP_WCR:       // RW
+    case DP_SELECT:    // WO
+    case DP_ROUTESEL:  // WO
+    case AP_CSW:       // RW
+    case AP_TAR:       // RW
+    case AP_DRW:       // RW
+    case AP_DB0:       // RW
+    case AP_DB1:       // RW
+    case AP_DB2:       // RW
+    case AP_DB3:       // RW
+        return true;
+    case DP_IDCODE: // RO
+    case DP_RESEND: // RO
+    case DP_RDBUFF: // RO
+    case AP_CFG:    // RO
+    case AP_BASE:   // RO
+    case AP_IDR:    // RO
+        return false;
+    default:
+        SWD_WARN("Port value (%d) is neither a read or a write port", (int)port);
+        return false;
+    }
+}
 
 void set_packet_parity(uint8_t *packet) {}
 
