@@ -1,6 +1,7 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 #include "driver/swd_driver.h"
 #include "swd_conf.h"
@@ -130,6 +131,8 @@ swd_err_t swd_dap_start(swd_dap_t *dap) {
     SWD_ASSERT(dap != NULL);
     SWD_ASSERT(dap->driver != NULL);
 
+    SWD_INFO("Starting DAP");
+
     swd_driver_start(dap->driver);
 
     dap->is_stopped = false;
@@ -202,7 +205,7 @@ swd_err_t swd_dap_port_write(swd_dap_t *dap, swd_dap_port_t port, uint32_t data)
 
     BLOCK_UNDEFINED_PORT(port);
 
-    SWD_DEBUG("Writing 0x%08lx to %s", data, swd_dap_port_as_str(port));
+    SWD_DEBUG("Writing 0x%08" PRIx32 " to %s", data, swd_dap_port_as_str(port));
 
     if (swd_dap_port_is_DP(port)) {
         return _swd_dap_port_write_dp(dap, port, data);
@@ -260,7 +263,7 @@ static swd_err_t _swd_dap_setup(swd_dap_t *dap) {
         return SWD_DAP_START_ERR;
     }
     // Check if the IDCODE data is valid
-    SWD_INFO("IDCODE = 0x%08lx", idcode);
+    SWD_INFO("IDCODE = 0x%08" PRIx32, idcode);
     if (parity != _get_pairty_bit(idcode)) {
         SWD_ERROR("IDCODE read, but parity sent is invalid");
         return SWD_DAP_START_ERR;
