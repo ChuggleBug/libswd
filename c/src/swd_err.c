@@ -14,6 +14,12 @@ const char *swd_err_as_str(swd_err_t err) {
         return "SWD DAP Invalid Port Operation";
     case SWD_DAP_START_ERR:
         return "SWD DAP Start Error";
+    case SWD_HOST_NOT_STARTED:
+        return "SWD Host Not Started";
+    case SWD_TARGET_NOT_HALTED:
+        return "SWD Target Not Halted";
+    case SWD_HOST_START_ERR:
+        return "SWD Target Start Error";
 
 #ifdef SWD_DISABLE_UNDEFINED_PORT
     case SWD_DAP_UNDEFINED_PORT:
