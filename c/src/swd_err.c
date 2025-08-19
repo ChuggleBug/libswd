@@ -19,7 +19,11 @@ const char *swd_err_as_str(swd_err_t err) {
     case SWD_TARGET_NOT_HALTED:
         return "SWD Target Not Halted";
     case SWD_HOST_START_ERR:
-        return "SWD Target Start Error";
+        return "SWD Host Start Error";
+    case SWD_TARGET_BKPT_INVALID_ADDR:
+        return "SWD Target Breakpoint Invalid Address";
+    case SWD_TARGET_NO_MORE_BKPT:
+        return "SWD Target No More Breakpoints";
 
 #ifdef SWD_DISABLE_UNDEFINED_PORT
     case SWD_DAP_UNDEFINED_PORT:
