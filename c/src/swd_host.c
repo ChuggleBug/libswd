@@ -7,6 +7,8 @@
 #include "swd_host.h"
 #include "swd_log.h"
 #include "swd_target_register.h"
+#include "swd_dap.h"
+#include "swd_dap_port.h"
 
 #include "_swd_arch_addr_decl.h"
 
@@ -55,6 +57,8 @@ swd_err_t _swd_host_enable_arch_configs(swd_host_t *host);
  * @note Number of literal comparators is not implemented
  */
 swd_err_t _swd_host_detect_arch_configs(swd_host_t *host);
+
+swd_err_t _swd_host_dap_port_write_masked(swd_host_t *host, swd_dap_port_t port, uint32_t data, uint32_t mask);
 
 uint32_t _fpb_cmp_encode_bkpt(uint32_t addr, uint8_t fp_version);
 uint32_t _fpb_cmp_decode_bkpt(uint32_t cmp, uint8_t fp_version);
@@ -135,12 +139,52 @@ swd_err_t swd_host_halt_target(swd_host_t *host) {
 swd_err_t swd_host_step_target(swd_host_t *host) {
     SWD_HOST_CHECK_STARTED
 
-    // TODO: Handle Breakpoint logic
+    bool is_halted;
+    swd_err_t err = swd_host_is_target_halted(host, &is_halted);
+    SWD_HOST_RETURN_IF_NON_OK(err);
+
+    if (!is_halted) {
+        return SWD_TARGET_NOT_HALTED;
+    }
+
+    // Special logging logic to indicate that a breakpoint was stepped over
+#ifdef SWD_ENABLE_LOGGING
+    uint32_t pc;
+    uint32_t step_pc;
+    err = swd_host_register_read(host, REG_DEBUG_RETURN_ADDRESS, &pc);
+    SWD_HOST_RETURN_IF_NON_OK(err);
+
     // Send a step signal via DHSCR
-    swd_err_t err = swd_host_memory_write_word(host, DHCSR, DBG_KEY | C_STEP | C_DEBUGEN);
+    err = swd_host_memory_write_word(host, DHCSR, DBG_KEY | C_STEP | C_DEBUGEN);
+    SWD_HOST_RETURN_IF_NON_OK(err);
+
+    err = swd_host_register_read(host, REG_DEBUG_RETURN_ADDRESS, &step_pc);
+    SWD_HOST_RETURN_IF_NON_OK(err);
+
+    if (pc != step_pc) {
+        return SWD_OK;
+    }
+    
+    SWD_INFO("Stepping over breakpoint");
+    SWD_INFO("Note the core might be in a spin loop");
+
+#endif // SWD_ENABLE_LOGGING
+
+
+    // Temporarily Disable Breakpoints
+    err = swd_host_memory_write_word(host, FP_CTRL, KEY | ~ENABLE);
+    SWD_HOST_RETURN_IF_NON_OK(err);
+
+    // Send a step signal via DHSCR
+    err = swd_host_memory_write_word(host, DHCSR, DBG_KEY | C_STEP | C_DEBUGEN);
+    SWD_HOST_RETURN_IF_NON_OK(err);
+
+    // Reenable breakpoints
+    err = swd_host_memory_write_word(host, FP_CTRL, KEY | ENABLE);
     SWD_HOST_RETURN_IF_NON_OK(err);
 
     return SWD_OK;
+
 }
 
 swd_err_t swd_host_continue_target(swd_host_t *host) {
@@ -208,6 +252,11 @@ swd_err_t swd_host_memory_write_word(swd_host_t *host, uint32_t addr, uint32_t d
     SWD_HOST_CHECK_STARTED
     SWD_ASSERT(host->dap != NULL);
 
+    if (addr & 0x3) {
+        SWD_ERROR("Word writes need to be word aligned");
+        return SWD_TARGET_INVALID_ADDR;
+    }
+
     swd_err_t err = swd_dap_port_write(host->dap, AP_TAR, addr);
     SWD_HOST_RETURN_IF_NON_OK(err);
 
@@ -220,6 +269,33 @@ swd_err_t swd_host_memory_write_word(swd_host_t *host, uint32_t addr, uint32_t d
 swd_err_t swd_host_memory_write_word_block(swd_host_t *host, uint32_t start_addr,
                                            uint32_t *data_buf, uint32_t bufsz) {
     SWD_HOST_CHECK_STARTED
+    SWD_ASSERT(host->dap != NULL);
+
+    if (start_addr & 0x3) {
+        SWD_ERROR("Word writes need to be word aligned");
+        return SWD_TARGET_INVALID_ADDR;
+    }
+
+    // Enable Auto increment TAR
+    SWD_DEBUG("Enabling auto-increment TAR");
+    swd_err_t err = _swd_host_dap_port_write_masked(host, AP_CSW, 0x10, 0x30);
+    SWD_HOST_RETURN_IF_NON_OK(err);
+
+    err = swd_dap_port_write(host->dap, AP_TAR, start_addr);
+    SWD_HOST_RETURN_IF_NON_OK(err);
+
+    for (uint32_t i = 0; i < bufsz; i++) {
+        err = swd_dap_port_write(host->dap, AP_DRW, data_buf[i]);
+        if (err != SWD_OK) {
+            SWD_WARN("Write failed at data buffer index %" PRIu32, i);
+            return err;
+        }
+    }
+
+    // Disable Auto increment TAR
+    SWD_DEBUG("Disabling auto-increment TAR");
+    err = _swd_host_dap_port_write_masked(host, AP_CSW, 0x00, 0x30);
+    SWD_HOST_RETURN_IF_NON_OK(err);
 
     return SWD_OK;
 }
@@ -227,6 +303,19 @@ swd_err_t swd_host_memory_write_word_block(swd_host_t *host, uint32_t start_addr
 swd_err_t swd_host_memory_write_byte_block(swd_host_t *host, uint32_t start_addr, uint8_t *data_buf,
                                            uint32_t bufsz) {
     SWD_HOST_CHECK_STARTED
+    SWD_ASSERT(host->dap != NULL);
+
+    // Enable Auto increment TAR
+    SWD_DEBUG("Enabling auto-increment TAR");
+    swd_err_t err = _swd_host_dap_port_write_masked(host, AP_CSW, 0x10, 0x30);
+    SWD_HOST_RETURN_IF_NON_OK(err);
+
+    // TODO
+
+    // Disable Auto increment TAR
+    SWD_DEBUG("Disabling auto-increment TAR");
+    err = _swd_host_dap_port_write_masked(host, AP_CSW, 0x00, 0x30);
+    SWD_HOST_RETURN_IF_NON_OK(err);
 
     return SWD_OK;
 }
@@ -234,6 +323,11 @@ swd_err_t swd_host_memory_write_byte_block(swd_host_t *host, uint32_t start_addr
 swd_err_t swd_host_memory_read_word(swd_host_t *host, uint32_t addr, uint32_t *data) {
     SWD_HOST_CHECK_STARTED
     SWD_ASSERT(host->dap != NULL);
+
+    if (addr & 0x3) {
+        SWD_ERROR("Word writes need to be word aligned");
+        return SWD_TARGET_INVALID_ADDR;
+    }
 
     swd_err_t err = swd_dap_port_write(host->dap, AP_TAR, addr);
     SWD_HOST_RETURN_IF_NON_OK(err);
@@ -247,6 +341,33 @@ swd_err_t swd_host_memory_read_word(swd_host_t *host, uint32_t addr, uint32_t *d
 swd_err_t swd_host_memory_read_word_block(swd_host_t *host, uint32_t start_addr, uint32_t *data_buf,
                                           uint32_t bufsz) {
     SWD_HOST_CHECK_STARTED
+    SWD_ASSERT(host->dap != NULL);
+
+    if (start_addr & 0x3) {
+        SWD_ERROR("Word writes need to be word aligned");
+        return SWD_TARGET_INVALID_ADDR;
+    }
+
+    // Enable Auto increment TAR
+    SWD_DEBUG("Enabling auto-increment TAR");
+    swd_err_t err = _swd_host_dap_port_write_masked(host, AP_CSW, 0x10, 0x30);
+    SWD_HOST_RETURN_IF_NON_OK(err);
+
+    err = swd_dap_port_write(host->dap, AP_TAR, start_addr);
+    SWD_HOST_RETURN_IF_NON_OK(err);
+
+    for (uint32_t i = 0; i < bufsz; i++) {
+        err = swd_dap_port_read(host->dap, AP_DRW, data_buf + i);
+        if (err != SWD_OK) {
+            SWD_WARN("Read failed at data buffer index %" PRIu32, i);
+            return err;
+        }
+    }
+
+    // Disable Auto increment TAR
+    SWD_DEBUG("Disabling auto-increment TAR");
+    err = _swd_host_dap_port_write_masked(host, AP_CSW, 0x00, 0x30);
+    SWD_HOST_RETURN_IF_NON_OK(err);
 
     return SWD_OK;
 }
@@ -254,6 +375,20 @@ swd_err_t swd_host_memory_read_word_block(swd_host_t *host, uint32_t start_addr,
 swd_err_t swd_host_memory_read_byte_block(swd_host_t *host, uint32_t start_addr, uint8_t *data_buf,
                                           uint32_t bufsz) {
     SWD_HOST_CHECK_STARTED
+    SWD_ASSERT(host->dap != NULL);
+
+    // Enable Auto increment TAR
+    SWD_DEBUG("Enabling auto-increment TAR");
+    swd_err_t err = _swd_host_dap_port_write_masked(host, AP_CSW, 0x10, 0x30);
+    SWD_HOST_RETURN_IF_NON_OK(err);
+
+    // TODO
+
+
+    // Disable Auto increment TAR
+    SWD_DEBUG("Disabling auto-increment TAR");
+    err = _swd_host_dap_port_write_masked(host, AP_CSW, 0x00, 0x30);
+    SWD_HOST_RETURN_IF_NON_OK(err);
 
     return SWD_OK;
 }
@@ -326,7 +461,7 @@ swd_err_t swd_host_add_breakpoint(swd_host_t *host, uint32_t addr) {
 
     if (host->_fpb_version == FPB_VERSION_1 && addr >= SRAM_BASE_ADDR) {
         SWD_WARN("FPB V1 does not breakpoint signals beyond the ROM reigon");
-        return SWD_TARGET_BKPT_INVALID_ADDR;
+        return SWD_TARGET_INVALID_ADDR;
     }
 
     // Scan all registers
@@ -342,7 +477,7 @@ swd_err_t swd_host_add_breakpoint(swd_host_t *host, uint32_t addr) {
 
     if (encoded_addr == FPB_ADDR_ERROR) {
         SWD_ERROR("Cannot encode 0x%08" PRIx32 " as a breakpoint address", addr);
-        return SWD_TARGET_BKPT_INVALID_ADDR;
+        return SWD_TARGET_INVALID_ADDR;
     }
     for (uint32_t i = 0; i < host->code_cmp_cnt; i++) {
         fp_cmpn_addr = FP_CMPN + (4 * i);
@@ -376,7 +511,7 @@ swd_err_t swd_host_remove_breakpoint(swd_host_t *host, uint32_t addr) {
 
     if (host->_fpb_version == FPB_VERSION_1 && addr >= SRAM_BASE_ADDR) {
         SWD_WARN("FPB V1 does not breakpoint signals beyond the ROM reigon");
-        return SWD_TARGET_BKPT_INVALID_ADDR;
+        return SWD_TARGET_INVALID_ADDR;
     }
 
     swd_err_t err;
@@ -396,7 +531,7 @@ swd_err_t swd_host_remove_breakpoint(swd_host_t *host, uint32_t addr) {
         }
     }
 
-    return SWD_TARGET_BKPT_INVALID_ADDR;
+    return SWD_TARGET_INVALID_ADDR;
 }
 
 swd_err_t swd_host_clear_breakpoints(swd_host_t *host) {
@@ -458,18 +593,22 @@ swd_err_t swd_host_get_breakpoints(swd_host_t *host, uint32_t *buf, uint32_t buf
 swd_err_t _swd_host_setup_dap_configs(swd_host_t *host) {
     // Set transfers to word (CSW.Size = 0x2)
     SWD_INFO("Setting transfers to word");
-    uint32_t csw;
-    swd_err_t err = swd_dap_port_read(host->dap, AP_CSW, &csw);
-    SWD_HOST_RETURN_IF_NON_OK(err);
-    err = swd_dap_port_write(host->dap, AP_CSW, (csw & ~0x7) | 0x2);
+    SWD_INFO("Setting address auto-increment to false");
+    // uint32_t csw;
+    // swd_err_t err = swd_dap_port_read(host->dap, AP_CSW, &csw);
+    // SWD_HOST_RETURN_IF_NON_OK(err);
+    // err = swd_dap_port_write(host->dap, AP_CSW, (csw & ~0x37) | 0x2); // Size = 0b010 (word), AddrInc = 0b00 (no inc)
+    // SWD_HOST_RETURN_IF_NON_OK(err);
+
+    // Size = 0b010 (word), AddrInc = 0b00 (no inc)
+    swd_err_t err = _swd_host_dap_port_write_masked(host, AP_CSW, 0x02, 0x37);
     SWD_HOST_RETURN_IF_NON_OK(err);
 
     return SWD_OK;
 }
 
 swd_err_t _swd_host_enable_arch_configs(swd_host_t *host) {
-    // Enable the [Flash Patch and] Breakpoint unit
-
+    // Enable the Flash Patch and Breakpoint unit
     SWD_INFO("Enabling FPB Unit");
     uint32_t fp_ctrl;
     swd_err_t err;
@@ -512,6 +651,16 @@ swd_err_t _swd_host_detect_arch_configs(swd_host_t *host) {
     SWD_INFO("Detected number of literal comparators (FP Remaps): %" PRIu8,
              (uint8_t)((fp_ctrl & 0xF00) >> 0x8));
     SWD_INFO("Note that literal comparators are not used");
+
+    return SWD_OK;
+}
+
+swd_err_t _swd_host_dap_port_write_masked(swd_host_t *host, swd_dap_port_t port, uint32_t data, uint32_t mask) {
+    uint32_t rd_data;
+    swd_err_t err = swd_dap_port_read(host->dap, port, &rd_data);
+    SWD_HOST_RETURN_IF_NON_OK(err);
+    err = swd_dap_port_write(host->dap, port, (rd_data & ~mask) | (data & mask));
+    SWD_HOST_RETURN_IF_NON_OK(err);
 
     return SWD_OK;
 }

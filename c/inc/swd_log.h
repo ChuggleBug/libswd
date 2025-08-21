@@ -40,20 +40,20 @@ extern void _swd_log_error(char *fmt, ...);
 #include <stdio.h>
 
 #if defined(SWD_LOG_LEVEL_DEBUG)
-#define SWD_DEBUG(fmt, ...) printf("[DEBUG] %s:%d -> " fmt "\n", __func__, __LINE__, ##__VA_ARGS__)
+#define SWD_DEBUG(fmt, ...) printf("[DEBUG] %s:%d -> " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 #endif // defined(DEBUG)
 
 #if defined(SWD_LOG_LEVEL_INFO) || defined(SWD_LOG_LEVEL_DEBUG)
-#define SWD_INFO(fmt, ...) printf("[INFO ] %s:%d -> " fmt "\n", __func__, __LINE__, ##__VA_ARGS__)
+#define SWD_INFO(fmt, ...) printf("[INFO ] %s:%d -> " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 #endif // defined(DEBUG - INFO)
 
 #if defined(SWD_LOG_LEVEL_WARN) || defined(SWD_LOG_LEVEL_INFO) || defined(SWD_LOG_LEVEL_DEBUG)
-#define SWD_WARN(fmt, ...) printf("[WARN ] %s:%d -> " fmt "\n", __func__, __LINE__, ##__VA_ARGS__)
+#define SWD_WARN(fmt, ...) printf("[WARN ] %s:%d -> " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 #endif // defined(DEBUG - WARN)
 
 #if defined(SWD_LOG_LEVEL_ERROR) || defined(SWD_LOG_LEVEL_WARN) || defined(SWD_LOG_LEVEL_INFO) ||  \
     defined(SWD_LOG_LEVEL_DEBUG)
-#define SWD_ERROR(fmt, ...) printf("[ERROR] %s:%d -> " fmt "\n", __func__, __LINE__, ##__VA_ARGS__)
+#define SWD_ERROR(fmt, ...) printf("[ERROR] %s:%d -> " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 #endif // defined(DEBUG - ERROR)
 
 #endif // (defined(SWD_ENABLE_LOGGING) && defined(SWD_USE_CUSTOM_PRINT))
