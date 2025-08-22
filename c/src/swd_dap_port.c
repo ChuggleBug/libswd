@@ -1,6 +1,6 @@
 
-#include <stdint.h>
 #include <inttypes.h>
+#include <stdint.h>
 
 #include "swd_dap_port.h"
 #include "swd_log.h"
@@ -41,7 +41,7 @@ bool swd_dap_port_is_DP(swd_dap_port_t port) {
     case AP_IDR:
         return false;
     default:
-        SWD_WARN("Port value (%" PRIi32 ") is neither an AP or DP", (int32_t)port);
+        SWD_LOGW("Port value (%" PRIi32 ") is neither an AP or DP", (int32_t)port);
         return false;
     }
 }
@@ -71,7 +71,7 @@ bool swd_dap_port_is_a_read_port(swd_dap_port_t port) {
     case DP_ROUTESEL: // WO
         return false;
     default:
-        SWD_WARN("Port value (%" PRIi32 ") is neither a read or a write port", (int32_t)port);
+        SWD_LOGW("Port value (%" PRIi32 ") is neither a read or a write port", (int32_t)port);
         return false;
     }
 }
@@ -99,7 +99,7 @@ bool swd_dap_port_is_a_write_port(swd_dap_port_t port) {
     case AP_IDR:    // RO
         return false;
     default:
-        SWD_WARN("Port value (%" PRIi32 ") is neither a read or a write port", (int32_t)port);
+        SWD_LOGW("Port value (%" PRIi32 ") is neither a read or a write port", (int32_t)port);
         return false;
     }
 }
@@ -139,7 +139,7 @@ uint8_t swd_dap_port_as_packet(swd_dap_port_t port, bool is_read) {
         packet |= AxC;
         break;
     default:
-        SWD_WARN("Unknown dap port value (%" PRIi32 ")", ((int32_t)port));
+        SWD_LOGW("Unknown dap port value (%" PRIi32 ")", ((int32_t)port));
         break;
     }
 
@@ -170,7 +170,7 @@ uint32_t swd_dap_port_as_apbanksel_bits(swd_dap_port_t port) {
     case AP_IDR:
         return 0xF0;
     default:
-        SWD_WARN("Invalid port passed to translate to apbanksel. Expected AP, got %s",
+        SWD_LOGW("Invalid port passed to translate to apbanksel. Expected AP, got %s",
                  swd_dap_port_as_str(port));
         return SELECT_APBANKSEL_ERR;
     }

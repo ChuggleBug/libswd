@@ -1,7 +1,7 @@
 
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include <inttypes.h>
 
 #include "driver/swd_driver.h"
 #include "swd_conf.h"
@@ -27,15 +27,15 @@
     do {                                                                                           \
         if (port == AP_DB0 || port == AP_DB1 || port == AP_DB2 || port == AP_DB3 ||                \
             port == AP_BASE) {                                                                     \
-            SWD_ERROR("**************************************************************************" \
-                      "*****");                                                                    \
-            SWD_ERROR("Under certain misconfigurations, the selected port (%s) can lead to ",      \
-                      swd_dap_port_as_str(port));                                                  \
-            SWD_ERROR("undefined behavior. To prevent this, this port has been disabled To ");     \
-            SWD_ERROR(                                                                             \
+            SWD_LOGE("**************************************************************************"  \
+                     "*****");                                                                     \
+            SWD_LOGE("Under certain misconfigurations, the selected port (%s) can lead to ",       \
+                     swd_dap_port_as_str(port));                                                   \
+            SWD_LOGE("undefined behavior. To prevent this, this port has been disabled To ");      \
+            SWD_LOGE(                                                                              \
                 "allow usage of this port, unselect 'SWD_DISABLE_UNDEFINED_PORT' in swd_conf.h");  \
-            SWD_ERROR("**************************************************************************" \
-                      "*****");                                                                    \
+            SWD_LOGE("**************************************************************************"  \
+                     "*****");                                                                     \
             return SWD_DAP_UNDEFINED_PORT;                                                         \
         }                                                                                          \
     } while (0)
@@ -131,21 +131,21 @@ swd_err_t swd_dap_start(swd_dap_t *dap) {
     SWD_ASSERT(dap != NULL);
     SWD_ASSERT(dap->driver != NULL);
 
-    SWD_INFO("Starting DAP");
+    SWD_LOGI("Starting DAP");
 
     swd_driver_start(dap->driver);
 
     dap->is_stopped = false;
 
     if (_swd_dap_reset_line(dap) != SWD_OK) {
-        SWD_ERROR("Cannot drive DAP. Stopping");
+        SWD_LOGE("Cannot drive DAP. Stopping");
         swd_driver_stop(dap->driver);
         dap->is_stopped = true;
         return SWD_DAP_START_ERR;
     }
 
     if (_swd_dap_setup(dap) != SWD_OK) {
-        SWD_ERROR("Cannot establish DAP connection. Stopping");
+        SWD_LOGE("Cannot establish DAP connection. Stopping");
         swd_driver_stop(dap->driver);
         dap->is_stopped = true;
         return SWD_DAP_START_ERR;
@@ -170,18 +170,18 @@ swd_err_t swd_dap_port_read(swd_dap_t *dap, swd_dap_port_t port, uint32_t *data)
     SWD_ASSERT(data != NULL);
 
     if (dap->is_stopped) {
-        SWD_WARN("Attempting to read from a stopped DAP");
+        SWD_LOGW("Attempting to read from a stopped DAP");
         return SWD_DAP_NOT_STARTED;
     }
 
     if (!swd_dap_port_is_a_read_port(port)) {
-        SWD_WARN("Requested port (%s) is not allowed to be read from", swd_dap_port_as_str(port));
+        SWD_LOGW("Requested port (%s) is not allowed to be read from", swd_dap_port_as_str(port));
         return SWD_DAP_INVALID_PORT_OP;
     }
 
     BLOCK_UNDEFINED_PORT(port);
 
-    SWD_DEBUG("Reading port %s", swd_dap_port_as_str(port));
+    // SWD_LOGV("Reading port %s", swd_dap_port_as_str(port));
 
     if (swd_dap_port_is_DP(port)) {
         return _swd_dap_port_read_dp(dap, port, data);
@@ -194,18 +194,18 @@ swd_err_t swd_dap_port_write(swd_dap_t *dap, swd_dap_port_t port, uint32_t data)
     SWD_ASSERT(dap != NULL);
 
     if (dap->is_stopped) {
-        SWD_WARN("Attempting to read from a stopped DAP");
+        SWD_LOGW("Attempting to read from a stopped DAP");
         return SWD_DAP_NOT_STARTED;
     }
 
     if (!swd_dap_port_is_a_write_port(port)) {
-        SWD_WARN("Requested port (%s) is not allowed to be written to", swd_dap_port_as_str(port));
+        SWD_LOGW("Requested port (%s) is not allowed to be written to", swd_dap_port_as_str(port));
         return SWD_DAP_INVALID_PORT_OP;
     }
 
     BLOCK_UNDEFINED_PORT(port);
 
-    SWD_DEBUG("Writing 0x%08" PRIx32 " to %s", data, swd_dap_port_as_str(port));
+    // SWD_LOGV("Writing 0x%08" PRIx32 " to %s", data, swd_dap_port_as_str(port));
 
     if (swd_dap_port_is_DP(port)) {
         return _swd_dap_port_write_dp(dap, port, data);
@@ -259,21 +259,21 @@ static swd_err_t _swd_dap_setup(swd_dap_t *dap) {
 
     // IDCODE read MUST return an OK
     if (ack != ACK_OK) {
-        SWD_ERROR("Cannot read IDCODE, no connection to target can be established");
+        SWD_LOGE("Cannot read IDCODE, no connection to target can be established");
         return SWD_DAP_START_ERR;
     }
     // Check if the IDCODE data is valid
-    SWD_INFO("IDCODE = 0x%08" PRIx32, idcode);
+    SWD_LOGI("IDCODE = 0x%08" PRIx32, idcode);
     if (parity != _get_pairty_bit(idcode)) {
-        SWD_ERROR("IDCODE read, but parity sent is invalid");
+        SWD_LOGE("IDCODE read, but parity sent is invalid");
         return SWD_DAP_START_ERR;
     }
 
     // Power on AP
-    SWD_INFO("Initializing Access Port");
+    SWD_LOGD("Initializing Access Port");
     if (swd_dap_port_write(dap, DP_CTRL_STAT, 0x50000000) !=
         SWD_OK) { // CDBGPWRUPREQ | CSYSPWRUPREQ
-        SWD_ERROR("Access Port failed to initialize");
+        SWD_LOGE("Access Port failed to initialize");
         return SWD_DAP_START_ERR;
     }
 
@@ -281,16 +281,16 @@ static swd_err_t _swd_dap_setup(swd_dap_t *dap) {
     _swd_dap_idle_short(dap);
     if (swd_dap_port_read(dap, DP_CTRL_STAT, &data) == SWD_OK) {
         if (!(data & 0xf0000000)) { // CSYSPWRUPACK |  CDBGPWRUPACK | CDBGPWRUPREQ | CSYSPWRUPREQ
-            SWD_ERROR("Could not verify AP was powered on");
+            SWD_LOGE("Could not verify AP was powered on");
             return SWD_DAP_START_ERR;
         } else {
-            SWD_DEBUG("AP power on ACK received!");
+            SWD_LOGV("AP power on ACK received!");
         }
     }
 
     // Clear Abort Errors
     if (swd_dap_port_write(dap, DP_ABORT, 0x1F) != SWD_OK) {
-        SWD_WARN("Could not reset active errors on reset");
+        SWD_LOGW("Could not reset active errors on reset");
     }
 
     return SWD_OK;
@@ -358,7 +358,7 @@ static swd_err_t _swd_dap_port_write_dp(swd_dap_t *dap, swd_dap_port_t port, uin
 static swd_err_t _swd_dap_port_read_ap(swd_dap_t *dap, swd_dap_port_t port, uint32_t *data) {
     swd_err_t err;
     if ((err = _swd_dap_port_set_banksel(dap, port)) != SWD_OK) {
-        SWD_ERROR("Could not update APBANKSEL");
+        SWD_LOGE("Could not update APBANKSEL");
         return SWD_ERR;
     }
 
@@ -400,7 +400,7 @@ static swd_err_t _swd_dap_port_write_ap(swd_dap_t *dap, swd_dap_port_t port, uin
 static swd_err_t _swd_dap_port_read_from_packet(swd_dap_t *dap, uint8_t packet, uint32_t *data,
                                                 uint32_t retry_count) {
     if (retry_count == 0) {
-        SWD_WARN("Retry count for sending packet exceeded");
+        SWD_LOGV("Retry count for sending packet exceeded");
         return SWD_ERR;
     }
 
@@ -418,7 +418,7 @@ static swd_err_t _swd_dap_port_read_from_packet(swd_dap_t *dap, uint8_t packet, 
 
         // Validate parity from rdata
         if (rd_parity != _get_pairty_bit(rd_parity)) {
-            SWD_INFO("Data received was OK, but had invalid parity. Retrying");
+            SWD_LOGV("Data received was OK, but had invalid parity. Retrying");
             return _swd_dap_port_read_from_packet(dap, packet, data, retry_count - 1);
         }
 
@@ -426,17 +426,17 @@ static swd_err_t _swd_dap_port_read_from_packet(swd_dap_t *dap, uint8_t packet, 
         return SWD_OK;
     }
     case ACK_WAIT:
-        SWD_DEBUG("DAP sent back a WAIT. Retrying");
+        SWD_LOGV("DAP sent back a WAIT. Retrying");
         swd_driver_turnaround(dap->driver);
         return _swd_dap_port_read_from_packet(dap, packet, data, retry_count - 1);
     case ACK_FAULT:
-        SWD_DEBUG("DAP sent back a FAULT. Handling");
+        SWD_LOGD("DAP sent back a FAULT. Handling");
         swd_driver_turnaround(dap->driver);
         _swd_dap_handle_fault(dap);
         return _swd_dap_port_read_from_packet(dap, packet, data, retry_count - 1);
         break;
     default:
-        SWD_DEBUG("DAP sent back a UNKOWN. Fallback to error");
+        SWD_LOGD("DAP sent back a UNKOWN. Fallback to error");
         break;
     }
     _swd_dap_handle_error(dap);
@@ -446,7 +446,7 @@ static swd_err_t _swd_dap_port_read_from_packet(swd_dap_t *dap, uint8_t packet, 
 static swd_err_t _swd_dap_port_write_from_packet(swd_dap_t *dap, uint8_t packet, uint32_t data,
                                                  uint32_t retry_count) {
     if (retry_count == 0) {
-        SWD_WARN("Retry count for sending packet exceeded");
+        SWD_LOGW("Retry count for sending packet exceeded");
         return SWD_ERR;
     }
 
@@ -470,20 +470,20 @@ static swd_err_t _swd_dap_port_write_from_packet(swd_dap_t *dap, uint8_t packet,
         }
 
         if (ctrlstat & 0x80) {
-            SWD_WARN("WDATAERR detected. Resending");
+            SWD_LOGV("WDATAERR detected. Resending");
             return _swd_dap_port_write_from_packet(dap, packet, data, retry_count - 1);
         }
         return SWD_OK;
     }
     case ACK_WAIT:
-        SWD_DEBUG("DAP sent back a WAIT. Retrying");
+        SWD_LOGV("DAP sent back a WAIT. Retrying");
         return _swd_dap_port_write_from_packet(dap, packet, data, retry_count - 1);
     case ACK_FAULT:
-        SWD_DEBUG("DAP sent back a FAULT. Handling");
+        SWD_LOGD("DAP sent back a FAULT. Handling");
         _swd_dap_handle_fault(dap);
         return _swd_dap_port_write_from_packet(dap, packet, data, retry_count - 1);
     default:
-        SWD_DEBUG("DAP sent back a UNKOWN. Fallback to error");
+        SWD_LOGD("DAP sent back a UNKOWN. Fallback to error");
         break;
     }
     _swd_dap_handle_error(dap);
@@ -496,19 +496,19 @@ static void _swd_dap_handle_fault(swd_dap_t *dap) {
     //  - Error in AP transaction
     uint32_t ctrlstat;
     if (swd_dap_port_read(dap, DP_CTRL_STAT, &ctrlstat) != SWD_OK) {
-        SWD_WARN("Could not read CTRL/STAT to handle FAULT");
+        SWD_LOGV("Could not read CTRL/STAT to handle FAULT");
         return;
     }
 
     if (ctrlstat & 0x80) { // WDATAERR
-        SWD_DEBUG("Cause: Parity Error in the previous write data sent.");
+        SWD_LOGD("Cause: Parity Error in the previous write data sent.");
         swd_dap_port_write(dap, DP_ABORT, 0x8); // WDERRCLR
     } else if (ctrlstat & 0x20) {               // STICKYERR
-        SWD_DEBUG("Cause: Error in the previous in the AP transcation");
+        SWD_LOGD("Cause: Error in the previous in the AP transcation");
         swd_dap_port_write(dap, DP_ABORT, 0x4); // STKERRCLR
         dap->_ap_error = true;
     } else {
-        SWD_DEBUG("Cause: Unown Fault");
+        SWD_LOGD("Cause: Unown Fault");
     }
 }
 
@@ -517,14 +517,14 @@ static void _swd_dap_handle_error(swd_dap_t *dap) {
     // a line reset is tried before stopping the host
     // For the most part, when an error ACK (a lack of one) is read, a single turnaround
     // should be expected to check and see if the target exists at all
-    SWD_WARN("Resetting line due to an potentially out of sync DAP");
+    SWD_LOGW("Resetting line due to an potentially out of sync DAP");
     _swd_dap_reset_line(dap);
 
     if (_swd_dap_setup(dap) != ACK_OK) {
-        SWD_ERROR("Could not connect to DAP. Is it powered on?");
+        SWD_LOGE("Could not connect to DAP. Is it powered on?");
         swd_dap_stop(dap);
     } else {
-        SWD_WARN("Target resynced after error. Packet dropped");
+        SWD_LOGW("Target resynced after error. Packet dropped");
     }
     return;
 }

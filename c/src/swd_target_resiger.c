@@ -68,7 +68,7 @@ uint32_t swd_target_register_as_regsel(swd_target_register_t reg, bool is_read) 
         case REG_S30: val = 0b1011110; break;
         case REG_S31: val = 0b1011111; break;
         default: 
-            SWD_WARN("Unkown register. Using %s instead", swd_target_register_as_str(REG_DEBUG_RETURN_ADDRESS)); 
+            SWD_LOGW("Unkown register. Using %s instead", swd_target_register_as_str(REG_DEBUG_RETURN_ADDRESS)); 
             val = 0b0001111; break;
     }
 

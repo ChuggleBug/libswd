@@ -12,6 +12,8 @@
 /* Enable Built in logging of swd activity */
 #define SWD_ENABLE_LOGGING
 
+#define SWD_DISABLE_UNDEFINED_PORT
+
 #ifdef SWD_ENABLE_LOGGING
 
 /*
@@ -23,13 +25,12 @@
 // #define SWD_USE_CUSTOM_PRINT
 
 /* Log level used. At least one should be set */
-#define SWD_LOG_LEVEL_DEBUG
-// #define SWD_LOG_LEVEL_INFO
+// #define SWD_LOG_LEVEL_VERBOSE   // Mostly for unessesary information
+// #define SWD_LOG_LEVEL_DEBUG
+#define SWD_LOG_LEVEL_INFO
 // #define SWD_LOG_LEVEL_WARN
 // #define SWD_LOG_LEVEL_ERROR
 
 #endif // SWD_ENABLE_LOGGING
-
-#define SWD_DISABLE_UNDEFINED_PORT
 
 #endif // __SWD_CONF_H

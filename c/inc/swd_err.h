@@ -9,7 +9,7 @@
 #define SWD_ASSERT(cond)                                                                           \
     do {                                                                                           \
         if (!(cond)) {                                                                             \
-            SWD_ERROR("Runtime function assertion failed");                                        \
+            SWD_LOGE("Runtime function assertion failed");                                         \
             while (1)                                                                              \
                 ;                                                                                  \
         }                                                                                          \

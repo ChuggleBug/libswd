@@ -9,23 +9,23 @@
 void swd_driver_start(swd_driver_t *driver) {
     if (!driver->_started) {
         if (driver->init() != SWD_OK) {
-            SWD_ERROR("Driver failed to initialize");
+            SWD_LOGE("Driver failed to initialize");
             return;
         }
         driver->_started = true;
     } else {
-        SWD_WARN("Not starting a driver which was previously started");
+        SWD_LOGD("Not starting a driver which was previously started");
     }
 }
 
 void swd_driver_stop(swd_driver_t *driver) {
     if (driver->_started) {
         if (driver->deinit() != SWD_OK) {
-            SWD_ERROR("Driver failed to deinitialized");
+            SWD_LOGE("Driver failed to deinitialized");
         }
         driver->_started = false;
     } else {
-        SWD_WARN("Not stopping a driver which is not stopped");
+        SWD_LOGD("Not stopping a driver which is not stopped");
     }
 }
 
