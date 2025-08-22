@@ -3,12 +3,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "swd_dap.h"
+#include "swd_dap_port.h"
 #include "swd_err.h"
 #include "swd_host.h"
 #include "swd_log.h"
 #include "swd_target_register.h"
-#include "swd_dap.h"
-#include "swd_dap_port.h"
 
 #include "_swd_arch_addr_decl.h"
 
@@ -58,7 +58,8 @@ swd_err_t _swd_host_enable_arch_configs(swd_host_t *host);
  */
 swd_err_t _swd_host_detect_arch_configs(swd_host_t *host);
 
-swd_err_t _swd_host_dap_port_write_masked(swd_host_t *host, swd_dap_port_t port, uint32_t data, uint32_t mask);
+swd_err_t _swd_host_dap_port_write_masked(swd_host_t *host, swd_dap_port_t port, uint32_t data,
+                                          uint32_t mask);
 
 uint32_t _fpb_cmp_encode_bkpt(uint32_t addr, uint8_t fp_version);
 uint32_t _fpb_cmp_decode_bkpt(uint32_t cmp, uint8_t fp_version);
@@ -164,12 +165,11 @@ swd_err_t swd_host_step_target(swd_host_t *host) {
     if (pc != step_pc) {
         return SWD_OK;
     }
-    
+
     SWD_INFO("Stepping over breakpoint");
     SWD_INFO("Note the core might be in a spin loop");
 
 #endif // SWD_ENABLE_LOGGING
-
 
     // Temporarily Disable Breakpoints
     err = swd_host_memory_write_word(host, FP_CTRL, KEY | ~ENABLE);
@@ -184,7 +184,6 @@ swd_err_t swd_host_step_target(swd_host_t *host) {
     SWD_HOST_RETURN_IF_NON_OK(err);
 
     return SWD_OK;
-
 }
 
 swd_err_t swd_host_continue_target(swd_host_t *host) {
@@ -310,7 +309,57 @@ swd_err_t swd_host_memory_write_byte_block(swd_host_t *host, uint32_t start_addr
     swd_err_t err = _swd_host_dap_port_write_masked(host, AP_CSW, 0x10, 0x30);
     SWD_HOST_RETURN_IF_NON_OK(err);
 
-    // TODO
+    uint32_t end_addr = start_addr + bufsz;
+    uint8_t byte_offset = start_addr & 0x3;
+
+    if (byte_offset) {
+        uint32_t word_buf;
+        uint32_t aligned_start = start_addr & ~0x3;
+        uint8_t shamt;
+        SWD_DEBUG("Reading word 0x%08" PRIx32 " non word aligned byte transfer", aligned_start);
+        // Write the bytes which are non word aligned in the front
+        // Changes the buffer reference to a word aligned byte
+        err = swd_host_memory_read_word(host, aligned_start, &word_buf);
+        SWD_HOST_RETURN_IF_NON_OK(err);
+
+        for (uint8_t i = byte_offset; i < 4; i++) {
+            shamt = 8 * i;
+            word_buf = (word_buf & ~(0xFF << shamt)) | (*(data_buf++) << shamt);
+        }
+        err = swd_host_memory_write_word(host, aligned_start, word_buf);
+        // Adjust new start address to write word aligned memory block
+        start_addr += (4 - byte_offset);
+        bufsz -= (4 - byte_offset);
+    }
+
+    // Write as much data which is word aligned
+    swd_dap_port_write(host->dap, AP_TAR, start_addr);
+    for (uint32_t i = 0; i < bufsz / 4; i++) {
+        err = swd_dap_port_write(host->dap, AP_DRW,
+                                 data_buf[0] | (data_buf[1] << 8) | (data_buf[2] << 16) |
+                                     (data_buf[3] << 24));
+        SWD_HOST_RETURN_IF_NON_OK(err);
+        // The starting address of the trailing bytes needs to be tracked
+        // start_addr += 4;
+        data_buf += 4;
+    }
+
+    byte_offset = end_addr & 0x3;
+    if (byte_offset) {
+        // There isnt enough bytes at the end to make a full word
+        uint32_t word_buf;
+        uint32_t aligned_end = end_addr & ~0x3;
+        uint8_t shamt;
+        SWD_DEBUG("Reading word 0x%08" PRIx32 " non word aligned byte transfer", aligned_end);
+        err = swd_host_memory_read_word(host, aligned_end, &word_buf);
+        SWD_HOST_RETURN_IF_NON_OK(err);
+        for (uint8_t i = 0; i < byte_offset; i++) {
+            shamt = 8 * i;
+            word_buf = (word_buf & ~(0xFF << shamt)) | (*(data_buf++) << shamt);
+        }
+        err = swd_host_memory_write_word(host, aligned_end, word_buf);
+        SWD_HOST_RETURN_IF_NON_OK(err);
+    }
 
     // Disable Auto increment TAR
     SWD_DEBUG("Disabling auto-increment TAR");
@@ -383,7 +432,6 @@ swd_err_t swd_host_memory_read_byte_block(swd_host_t *host, uint32_t start_addr,
     SWD_HOST_RETURN_IF_NON_OK(err);
 
     // TODO
-
 
     // Disable Auto increment TAR
     SWD_DEBUG("Disabling auto-increment TAR");
@@ -597,8 +645,8 @@ swd_err_t _swd_host_setup_dap_configs(swd_host_t *host) {
     // uint32_t csw;
     // swd_err_t err = swd_dap_port_read(host->dap, AP_CSW, &csw);
     // SWD_HOST_RETURN_IF_NON_OK(err);
-    // err = swd_dap_port_write(host->dap, AP_CSW, (csw & ~0x37) | 0x2); // Size = 0b010 (word), AddrInc = 0b00 (no inc)
-    // SWD_HOST_RETURN_IF_NON_OK(err);
+    // err = swd_dap_port_write(host->dap, AP_CSW, (csw & ~0x37) | 0x2); // Size = 0b010 (word),
+    // AddrInc = 0b00 (no inc) SWD_HOST_RETURN_IF_NON_OK(err);
 
     // Size = 0b010 (word), AddrInc = 0b00 (no inc)
     swd_err_t err = _swd_host_dap_port_write_masked(host, AP_CSW, 0x02, 0x37);
@@ -655,7 +703,8 @@ swd_err_t _swd_host_detect_arch_configs(swd_host_t *host) {
     return SWD_OK;
 }
 
-swd_err_t _swd_host_dap_port_write_masked(swd_host_t *host, swd_dap_port_t port, uint32_t data, uint32_t mask) {
+swd_err_t _swd_host_dap_port_write_masked(swd_host_t *host, swd_dap_port_t port, uint32_t data,
+                                          uint32_t mask) {
     uint32_t rd_data;
     swd_err_t err = swd_dap_port_read(host->dap, port, &rd_data);
     SWD_HOST_RETURN_IF_NON_OK(err);
