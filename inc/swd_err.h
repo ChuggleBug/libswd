@@ -1,0 +1,47 @@
+
+#ifndef __SWD_ERR_H
+#define __SWD_ERR_H
+
+#include "swd_conf.h"
+#include "swd_log.h"
+
+#ifdef SWD_DO_RUNTIME_ASSERT
+#define SWD_ASSERT(cond)                                                                           \
+    do {                                                                                           \
+        if (!(cond)) {                                                                             \
+            SWD_LOGE("Runtime function assertion failed");                                         \
+            while (1)                                                                              \
+                ;                                                                                  \
+        }                                                                                          \
+    } while (0)
+
+#define SWD_ASSERT_OK(expr) SWD_ASSERT((expr == SWD_OK))
+
+#else
+
+#define SWD_ASSERT(cond)
+#define SWD_ASSERT_OK(expr)
+
+#endif // defined(SWD_DO_RUNTIME_ASSERT)
+
+typedef enum _swd_err_t {
+    SWD_OK = 0,
+    SWD_ERR,
+    SWD_DAP_NOT_STARTED,
+    SWD_DAP_INVALID_PORT_OP,
+    SWD_DAP_START_ERR,
+    SWD_HOST_NOT_STARTED,
+    SWD_TARGET_NOT_HALTED,
+    SWD_HOST_START_ERR,
+    SWD_TARGET_INVALID_ADDR,
+    SWD_TARGET_NO_MORE_BKPT,
+
+#ifdef SWD_DISABLE_UNDEFINED_PORT
+    SWD_DAP_UNDEFINED_PORT,
+#endif // SWD_DISABLE_UNDEFINED_PORT
+
+} swd_err_t;
+
+const char *swd_err_as_str(swd_err_t err);
+
+#endif // __SWD_ERR_H
