@@ -149,7 +149,7 @@ swd_err_t swd_host_step_target(swd_host_t *host) {
     }
 
     // Special logging logic to indicate that a breakpoint was stepped over
-#ifdef SWD_ENABLE_LOGGING
+#ifdef SWD_LOG_LEVEL_INFO
     uint32_t pc;
     uint32_t step_pc;
     err = swd_host_register_read(host, REG_DEBUG_RETURN_ADDRESS, &pc);
@@ -310,8 +310,8 @@ swd_err_t swd_host_memory_write_byte_block(swd_host_t *host, uint32_t start_addr
     SWD_HOST_RETURN_IF_NON_OK(err);
 
     uint32_t end_addr = start_addr + bufsz;
-    uint8_t byte_offset = start_addr & 0x3;
 
+    uint8_t byte_offset = start_addr & 0x3;
     if (byte_offset) {
         uint32_t word_buf;
         uint32_t aligned_start = start_addr & ~0x3;
@@ -431,7 +431,46 @@ swd_err_t swd_host_memory_read_byte_block(swd_host_t *host, uint32_t start_addr,
     swd_err_t err = _swd_host_dap_port_write_masked(host, AP_CSW, 0x10, 0x30);
     SWD_HOST_RETURN_IF_NON_OK(err);
 
-    // TODO
+    uint32_t end_addr = start_addr + bufsz;
+
+    // Buffer for reads to be written to
+    uint32_t word_buf;
+    uint8_t byte_offset = start_addr & 0x3;
+    if (byte_offset) {
+        uint8_t shamt;
+        err = swd_host_memory_read_word(host, start_addr & ~0x3, &word_buf);
+        SWD_HOST_RETURN_IF_NON_OK(err);
+        for (uint8_t i = byte_offset; i < 4; i++) {
+            shamt = 8 * i;
+            *(data_buf++) = (word_buf & (0xFF << shamt)) >> shamt;
+        }
+        start_addr += (4 - byte_offset);
+        bufsz -= (4 - byte_offset);
+    }
+
+    err = swd_dap_port_write(host->dap, AP_TAR, start_addr);
+    SWD_HOST_RETURN_IF_NON_OK(err);
+    for (uint32_t i = 0; i < bufsz / 4; i++) {
+        uint8_t shamt;
+        err = swd_dap_port_read(host->dap, AP_DRW, &word_buf);
+        SWD_HOST_RETURN_IF_NON_OK(err);
+        for (uint8_t i = 0; i < 4; i++) {
+            shamt = 8 * i;
+            data_buf[i] = (word_buf & (0xFF << shamt)) >> shamt;
+        }
+        data_buf += 4;
+    }
+
+    byte_offset = end_addr & 0x3;
+    if (byte_offset) {
+        uint8_t shamt;
+        err = swd_host_memory_read_word(host, end_addr & ~0x3, &word_buf);
+        SWD_HOST_RETURN_IF_NON_OK(err);
+        for (uint32_t i = 0; i < byte_offset; i++) {
+            shamt = 8 * i;
+            *(data_buf++) = (word_buf & (0xFF << shamt)) >> shamt;
+        }
+    }
 
     // Disable Auto increment TAR
     SWD_LOGD("Disabling auto-increment TAR");
