@@ -88,26 +88,30 @@ swd_err_t swd_host_start(swd_host_t *host) {
     swd_err_t err = swd_dap_start(host->dap);
     if (err != SWD_OK) {
         SWD_LOGW("Host experienced an error starting the DAP: %s", swd_err_as_str(err));
+        host->is_stopped = true;
         return SWD_HOST_START_ERR;
     }
-
+    
     err = _swd_host_setup_dap_configs(host);
     if (err != SWD_OK) {
         SWD_LOGW("Host experienced an error configuring the DAP: %s", swd_err_as_str(err));
+        host->is_stopped = true;
         return SWD_HOST_START_ERR;
     }
-
+    
     err = _swd_host_detect_arch_configs(host);
     if (err != SWD_OK) {
         SWD_LOGW("Host experienced an error detecting required architecture configurations: %s",
-                 swd_err_as_str(err));
+        swd_err_as_str(err));
+        host->is_stopped = true;
         return SWD_HOST_START_ERR;
     }
-
+    
     err = _swd_host_enable_arch_configs(host);
     if (err != SWD_OK) {
         SWD_LOGW("Host experienced an error enabling required architecture configurations: %s",
-                 swd_err_as_str(err));
+            swd_err_as_str(err));
+        host->is_stopped = true;
         return SWD_HOST_START_ERR;
     }
 
