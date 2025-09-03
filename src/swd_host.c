@@ -124,7 +124,7 @@ swd_err_t swd_host_stop(swd_host_t *host) {
     SWD_ASSERT(host->dap != NULL);
 
     host->is_stopped = true;
-    swd_err_t err = swd_dap_start(host->dap);
+    swd_err_t err = swd_dap_stop(host->dap);
     SWD_HOST_RETURN_IF_NON_OK(err);
 
     return SWD_OK;
