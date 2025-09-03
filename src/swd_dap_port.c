@@ -1,4 +1,5 @@
 
+#include <strings.h>
 #include <inttypes.h>
 #include <stdint.h>
 
@@ -17,6 +18,34 @@
 #define Ax4 (0x08)
 #define Ax8 (0x10)
 #define AxC (0x18)
+
+/*
+ * Port to string mapping
+ */
+static const struct port_str_mapping {
+    swd_dap_port_t port;
+    const char* name;
+} mappings[] = {
+    { DP_ABORT, "ABORT" },
+    { DP_IDCODE, "IDCODE" },
+    { DP_CTRL_STAT, "DP CTSTAT" },
+    { DP_WCR, "WCR" },
+    { DP_RESEND, "RESEND" },
+    { DP_SELECT, "SELECT" },
+    { DP_RDBUFF, "RDBUFF" },
+    { DP_ROUTESEL, "ROUTESEL" },
+
+    { AP_CSW, "CSW" },
+    { AP_TAR, "TAR" },
+    { AP_DRW, "DRW" },
+    { AP_DB0, "DB0" },
+    { AP_DB1, "DB1" },
+    { AP_DB2, "DB2" },
+    { AP_DB3, "DB3" },
+    { AP_CFG, "CFG" },
+    { AP_BASE, "AP ASE" },
+    { AP_IDR, "IDR" },
+};
 
 bool swd_dap_port_is_DP(swd_dap_port_t port) {
     switch (port) {
@@ -177,46 +206,20 @@ uint32_t swd_dap_port_as_apbanksel_bits(swd_dap_port_t port) {
 }
 
 const char *swd_dap_port_as_str(swd_dap_port_t port) {
-    switch (port) {
-    case DP_ABORT:
-        return "DP ABORT";
-    case DP_IDCODE:
-        return "DP IDCODE";
-    case DP_CTRL_STAT:
-        return "DP CTRL/STAT";
-    case DP_WCR:
-        return "DP WCR";
-    case DP_RESEND:
-        return "DP RESEND";
-    case DP_SELECT:
-        return "DP SELECT";
-    case DP_RDBUFF:
-        return "DP RDBUFF";
-    case DP_ROUTESEL:
-        return "DP ROUTESEL";
-
-    case AP_CSW:
-        return "AP CSW";
-    case AP_TAR:
-        return "AP TAR";
-    case AP_DRW:
-        return "AP DRW";
-    case AP_DB0:
-        return "AP DB0";
-    case AP_DB1:
-        return "AP DB1";
-    case AP_DB2:
-        return "AP DB2";
-    case AP_DB3:
-        return "AP DB3";
-    case AP_CFG:
-        return "AP CFG";
-    case AP_BASE:
-        return "AP BASE";
-    case AP_IDR:
-        return "AP IDR";
-
-    default:
-        return "UNKNOWN";
+    for (uint32_t i = 0; i < sizeof(mappings) / sizeof(struct port_str_mapping); i++){
+        if (mappings[i].port == port) {
+            return mappings[i].name;
+        }
     }
+    return "UKNOWN";
+}
+
+bool swd_dap_port_from_str(const char* str, swd_dap_port_t *port) {
+    for (uint32_t i = 0; i < sizeof(mappings) / sizeof(struct port_str_mapping); i++){
+        if (strcasecmp(mappings[i].name, str) == 0) {
+            *port = mappings[i].port;
+            return true;
+        }
+    }
+    return false;
 }

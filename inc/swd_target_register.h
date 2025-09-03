@@ -4,6 +4,8 @@
 
 #include <stdbool.h>
 
+#define DCRSR_REGSEL_ERR ((uint32_t)(-1))
+
 // TODO: arch specific registers
 typedef enum _swd_target_register_t {
     // Core registers R0-R12
@@ -74,7 +76,34 @@ typedef enum _swd_target_register_t {
     REG_S31,
 } swd_target_register_t;
 
+/*
+ * @brief Converts a swd_target_register_t register into the required REGSEL bits
+ * to be provided to DCRSR. In addition to the REGSEL bits, the  REG_RW bit is set
+ * @param swd_target_register_t requested register to access
+ * @param bool Wether or not the operation will be a read operation
+ * @note For values not defined in swd_target_register_t, DCRSR_REGSEL_ERR is returned
+ */
 uint32_t swd_target_register_as_regsel(swd_target_register_t reg, bool is_read);
+
+/* 
+ * @brief Converts a register value into a human-readable register abbreviation
+ */ 
 const char* swd_target_register_as_str(swd_target_register_t reg);
+
+/* 
+ * @brief Converts a string into its swd_target_register_t value
+ * @param str String to check
+ * @param reg Reference to store the register value
+ * @return Whether or not the conversion was successful
+ * @note In the case where this function fails and returns false, `reg`
+ *       will not be modified and its value might be unknown after the call.
+ * @note This function is case insensitive
+ * @note Two unique cases are provided. These were done to make it easier to allow
+ *  for a user to input the string from a interface
+ *  - DEBUG_RETURN_ADDRESS -> "PC"
+ *  - CONTROL_FAULTMASK_BASEPRI_PRIMASK -> "CFBP" 
+ */
+bool swd_target_register_from_str(const char* str, swd_target_register_t *reg);
+
 
 #endif // __SWD_TARGET_REGISTER_H

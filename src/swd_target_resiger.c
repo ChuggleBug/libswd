@@ -1,5 +1,6 @@
 
 #include <stdint.h>
+#include <strings.h>
 
 #include "swd_target_register.h"
 #include "swd_log.h"
@@ -7,6 +8,46 @@
 // DCRSR fields
 #define REG_W          ((uint32_t)0x10000) // Enable write to register
 #define REG_R          ((uint32_t)0x0)     // Mostly for readability
+
+/* 
+ * Register to string mapping
+ */
+static const struct reg_str_mapping {
+    swd_target_register_t reg;
+    const char *name;
+} mappings[] = {
+    { REG_R0,  "R0" },
+    { REG_R1,  "R1" },
+    { REG_R2,  "R2" },
+    { REG_R3,  "R3" },
+    { REG_R4,  "R4" },
+    { REG_R5,  "R5" },
+    { REG_R6,  "R6" },
+    { REG_R7,  "R7" },
+    { REG_R8,  "R8" },
+    { REG_R9,  "R9" },
+    { REG_R10, "R10" },
+    { REG_R11, "R11" },
+    { REG_R12, "R12" },
+    { REG_SP,  "SP" },
+    { REG_LR,  "LR" },
+    { REG_DEBUG_RETURN_ADDRESS, "Debug Return Address (PC)" },
+    { REG_XPSR, "XPSR" },
+    { REG_MSP,  "MSP" },
+    { REG_PSP,  "PSP" },
+    { REG_CONTROL_FAULTMASK_BASEPRI_PRIMASK, "CONTROL/FAULTMASK/BASEPRI/PRIMASK (CFBP)" },
+    { REG_FPSCR, "FPSCR" },
+
+    { REG_S0,  "S0" },  { REG_S1,  "S1" },  { REG_S2,  "S2" },  { REG_S3,  "S3" },
+    { REG_S4,  "S4" },  { REG_S5,  "S5" },  { REG_S6,  "S6" },  { REG_S7,  "S7" },
+    { REG_S8,  "S8" },  { REG_S9,  "S9" },  { REG_S10, "S10" }, { REG_S11, "S11" },
+    { REG_S12, "S12" }, { REG_S13, "S13" }, { REG_S14, "S14" }, { REG_S15, "S15" },
+    { REG_S16, "S16" }, { REG_S17, "S17" }, { REG_S18, "S18" }, { REG_S19, "S19" },
+    { REG_S20, "S20" }, { REG_S21, "S21" }, { REG_S22, "S22" }, { REG_S23, "S23" },
+    { REG_S24, "S24" }, { REG_S25, "S25" }, { REG_S26, "S26" }, { REG_S27, "S27" },
+    { REG_S28, "S28" }, { REG_S29, "S29" }, { REG_S30, "S30" }, { REG_S31, "S31" },
+};
+
 
 uint32_t swd_target_register_as_regsel(swd_target_register_t reg, bool is_read) {
     uint32_t val = 0;
@@ -68,8 +109,8 @@ uint32_t swd_target_register_as_regsel(swd_target_register_t reg, bool is_read) 
         case REG_S30: val = 0b1011110; break;
         case REG_S31: val = 0b1011111; break;
         default: 
-            SWD_LOGW("Unkown register. Using %s instead", swd_target_register_as_str(REG_DEBUG_RETURN_ADDRESS)); 
-            val = 0b0001111; break;
+            SWD_LOGW("Unkown register");
+            return DCRSR_REGSEL_ERR;
     }
 
     val |= (is_read ? REG_R : REG_W);
@@ -79,38 +120,28 @@ uint32_t swd_target_register_as_regsel(swd_target_register_t reg, bool is_read) 
 
 
 const char* swd_target_register_as_str(swd_target_register_t reg) {
-    switch (reg) {
-        case REG_R0: return "R0";
-        case REG_R1: return "R1";
-        case REG_R2: return "R2";
-        case REG_R3: return "R3";
-        case REG_R4: return "R4";
-        case REG_R5: return "R5";
-        case REG_R6: return "R6";
-        case REG_R7: return "R7";
-        case REG_R8: return "R8";
-        case REG_R9: return "R9";
-        case REG_R10: return "R10";
-        case REG_R11: return "R11";
-        case REG_R12: return "R12";
-        case REG_SP: return "SP";
-        case REG_LR: return "LR";
-        case REG_DEBUG_RETURN_ADDRESS: return "Debug Return Address (PC)";
-        case REG_XPSR: return "XPSR";
-        case REG_MSP: return "MSP";
-        case REG_PSP: return "PSP";
-        case REG_CONTROL_FAULTMASK_BASEPRI_PRIMASK: return "CONTROL/FAULTMASK/BASEPRI/PRIMASK";
-        case REG_FPSCR: return "FPSCR";
-
-        case REG_S0: return "S0"; case REG_S1: return "S1"; case REG_S2: return "S2"; case REG_S3: return "S3";
-        case REG_S4: return "S4"; case REG_S5: return "S5"; case REG_S6: return "S6"; case REG_S7: return "S7";
-        case REG_S8: return "S8"; case REG_S9: return "S9"; case REG_S10: return "S10"; case REG_S11: return "S11";
-        case REG_S12: return "S12"; case REG_S13: return "S13"; case REG_S14: return "S14"; case REG_S15: return "S15";
-        case REG_S16: return "S16"; case REG_S17: return "S17"; case REG_S18: return "S18"; case REG_S19: return "S19";
-        case REG_S20: return "S20"; case REG_S21: return "S21"; case REG_S22: return "S22"; case REG_S23: return "S23";
-        case REG_S24: return "S24"; case REG_S25: return "S25"; case REG_S26: return "S26"; case REG_S27: return "S27";
-        case REG_S28: return "S28"; case REG_S29: return "S29"; case REG_S30: return "S30"; case REG_S31: return "S31";
-        default:
-            return "UNKNOWN";
+    for (uint32_t i = 0; i < sizeof(mappings) / sizeof(struct reg_str_mapping); i++) {
+        if (mappings[i].reg == reg) {
+            return mappings[i].name;
+        }
     }
+    return "UKNOWN";
+}
+
+bool swd_target_register_from_str(const char* str, swd_target_register_t *reg) {
+    if (strcasecmp("PC", str) == 0) {
+        *reg = REG_DEBUG_RETURN_ADDRESS;
+        return true;
+    }
+    if (strcasecmp("CFBP", str) == 0) {
+        *reg = REG_CONTROL_FAULTMASK_BASEPRI_PRIMASK;
+        return true;
+    }
+    for (uint32_t i = 0; i < sizeof(mappings) / sizeof(struct reg_str_mapping); i++) {
+        if (strcasecmp(mappings[i].name, str) == 0) {
+            *reg = mappings[i].reg;
+            return true;
+        }
+    }
+    return false;
 }
