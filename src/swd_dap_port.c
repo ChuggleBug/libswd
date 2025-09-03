@@ -28,7 +28,7 @@ static const struct port_str_mapping {
 } mappings[] = {
     { DP_ABORT, "ABORT" },
     { DP_IDCODE, "IDCODE" },
-    { DP_CTRL_STAT, "DP CTSTAT" },
+    { DP_CTRL_STAT, "CTSTAT" },
     { DP_WCR, "WCR" },
     { DP_RESEND, "RESEND" },
     { DP_SELECT, "SELECT" },
@@ -43,7 +43,7 @@ static const struct port_str_mapping {
     { AP_DB2, "DB2" },
     { AP_DB3, "DB3" },
     { AP_CFG, "CFG" },
-    { AP_BASE, "AP ASE" },
+    { AP_BASE, "BASE" },
     { AP_IDR, "IDR" },
 };
 
