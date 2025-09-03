@@ -24,6 +24,8 @@ const char *swd_err_as_str(swd_err_t err) {
         return "SWD Target Invalid Address";
     case SWD_TARGET_NO_MORE_BKPT:
         return "SWD Target No More Breakpoints";
+        case SWD_HOST_INVALID_REGISTER:
+        return "SWD Host Invalid Register";
 
 #ifdef SWD_DISABLE_UNDEFINED_PORT
     case SWD_DAP_UNDEFINED_PORT:

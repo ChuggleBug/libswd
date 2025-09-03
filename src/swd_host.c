@@ -496,6 +496,9 @@ swd_err_t swd_host_register_read(swd_host_t *host, swd_target_register_t reg, ui
     }
 
     uint32_t regsel = swd_target_register_as_regsel(reg, true);
+    if (regsel == DCRSR_REGSEL_ERR) {
+        return SWD_HOST_INVALID_REGISTER;
+    }
     err = swd_host_memory_write_word(host, DCRSR, regsel);
 
     uint32_t dhcsr;
@@ -531,6 +534,9 @@ swd_err_t swd_host_register_write(swd_host_t *host, swd_target_register_t reg, u
 
     uint32_t dhcsr;
     uint32_t regsel = swd_target_register_as_regsel(reg, false);
+    if (regsel == DCRSR_REGSEL_ERR) {
+        return SWD_HOST_INVALID_REGISTER;
+    }
     int32_t retry_count = REGRDY_READ_RETRY_CNT;
     do {
         err = swd_host_memory_read_word(host, DHCSR, &dhcsr);
