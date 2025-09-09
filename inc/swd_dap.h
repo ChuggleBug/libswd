@@ -23,7 +23,7 @@ typedef struct _swd_dap_t {
 void swd_dap_init(swd_dap_t *dap);
 
 /*
- * @brief Assign a pin driver for the dap to use for communication to a hardware port
+ * @brief Assign a driver for the dap to use for communication to a hardware port
  * @param swd_dap_t* reference of dap structure to assign the driver to
  * @param swd_driver_t* reference of the driver
  */
