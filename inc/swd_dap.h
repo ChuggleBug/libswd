@@ -10,8 +10,18 @@
 #include "swd_err.h"
 
 typedef struct _swd_dap_t {
+    /* 
+     * @brief Physical driver to communicate to the target with
+     */
     swd_driver_t *driver;
+    /*
+     * @brief Flag denoting whether or not the DAP is stopped
+     */
     bool is_stopped;
+    /*
+     * @brief Internal flag denoting when an AP transaction
+     *          error has ocurred
+     */
     bool _ap_error;
 } swd_dap_t;
 

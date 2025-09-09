@@ -13,10 +13,23 @@
 #endif // _Nullable
 
 typedef struct _swd_host_t {
-    /* struct attrs*/
+    /*
+     * @brief DAP to communicate to the target with
+     */
     swd_dap_t *dap;
+    /*
+     * @brief Flag denoting whether or not the host is started
+     * @note This value does not represent wether or not the
+     *          the target's core is halted
+     */
     bool is_stopped;
+    /*
+     * Number of code comparators (HW breakpoints) supported
+     */
     uint8_t code_cmp_cnt;
+    /*
+     * FPB unit version
+     */
     uint8_t _fpb_version;
 } swd_host_t;
 
