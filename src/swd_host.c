@@ -269,8 +269,8 @@ swd_err_t swd_host_memory_write_word(swd_host_t *host, uint32_t addr, uint32_t d
     return SWD_OK;
 }
 
-swd_err_t swd_host_memory_write_word_block(swd_host_t *host, uint32_t start_addr,
-                                           uint32_t *data_buf, uint32_t bufsz) {
+swd_err_t swd_host_memory_write_word_block(swd_host_t *host, uint32_t start_addr, uint32_t *data_buf, 
+                                           uint32_t bufsz, uint32_t* _Nullable w_cnt) {
     SWD_HOST_CHECK_STARTED
     SWD_ASSERT(host->dap != NULL);
 
@@ -287,11 +287,16 @@ swd_err_t swd_host_memory_write_word_block(swd_host_t *host, uint32_t start_addr
     err = swd_dap_port_write(host->dap, AP_TAR, start_addr);
     SWD_HOST_RETURN_IF_NON_OK(err);
 
+    if (w_cnt != NULL) {
+        *w_cnt = 0;
+    }
     for (uint32_t i = 0; i < bufsz; i++) {
         err = swd_dap_port_write(host->dap, AP_DRW, data_buf[i]);
         if (err != SWD_OK) {
-            SWD_LOGW("Write failed at data buffer index %" PRIu32, i);
             return err;
+        }
+        if (w_cnt != NULL) {
+            *w_cnt += 1;
         }
     }
 
@@ -304,7 +309,7 @@ swd_err_t swd_host_memory_write_word_block(swd_host_t *host, uint32_t start_addr
 }
 
 swd_err_t swd_host_memory_write_byte_block(swd_host_t *host, uint32_t start_addr, uint8_t *data_buf,
-                                           uint32_t bufsz) {
+                                           uint32_t bufsz, uint32_t* _Nullable w_cnt) {
     SWD_HOST_CHECK_STARTED
     SWD_ASSERT(host->dap != NULL);
 
@@ -315,8 +320,12 @@ swd_err_t swd_host_memory_write_byte_block(swd_host_t *host, uint32_t start_addr
 
     uint32_t end_addr = start_addr + bufsz;
 
+    if (w_cnt != NULL) {
+        *w_cnt = 0;
+    }
+
     uint8_t byte_offset = start_addr & 0x3;
-    if (byte_offset) {
+    if (byte_offset != 0x0) {
         uint32_t word_buf;
         uint32_t aligned_start = start_addr & ~0x3;
         uint8_t shamt;
@@ -334,7 +343,11 @@ swd_err_t swd_host_memory_write_byte_block(swd_host_t *host, uint32_t start_addr
         // Adjust new start address to write word aligned memory block
         start_addr += (4 - byte_offset);
         bufsz -= (4 - byte_offset);
+        if (w_cnt != NULL) {
+            *w_cnt += (4 - byte_offset);
+        }
     }
+
 
     // Write as much data which is word aligned
     swd_dap_port_write(host->dap, AP_TAR, start_addr);
@@ -343,13 +356,14 @@ swd_err_t swd_host_memory_write_byte_block(swd_host_t *host, uint32_t start_addr
                                  data_buf[0] | (data_buf[1] << 8) | (data_buf[2] << 16) |
                                      (data_buf[3] << 24));
         SWD_HOST_RETURN_IF_NON_OK(err);
-        // The starting address of the trailing bytes needs to be tracked
-        // start_addr += 4;
         data_buf += 4;
+        if (w_cnt != NULL) {
+            *w_cnt += 4;
+        }
     }
 
     byte_offset = end_addr & 0x3;
-    if (byte_offset) {
+    if (byte_offset != 0x0) {
         // There isnt enough bytes at the end to make a full word
         uint32_t word_buf;
         uint32_t aligned_end = end_addr & ~0x3;
@@ -363,7 +377,11 @@ swd_err_t swd_host_memory_write_byte_block(swd_host_t *host, uint32_t start_addr
         }
         err = swd_host_memory_write_word(host, aligned_end, word_buf);
         SWD_HOST_RETURN_IF_NON_OK(err);
+        if (w_cnt != NULL) {
+            *w_cnt += byte_offset;
+        }
     }
+
 
     // Disable Auto increment TAR
     SWD_LOGD("Disabling auto-increment TAR");
@@ -392,7 +410,7 @@ swd_err_t swd_host_memory_read_word(swd_host_t *host, uint32_t addr, uint32_t *d
 }
 
 swd_err_t swd_host_memory_read_word_block(swd_host_t *host, uint32_t start_addr, uint32_t *data_buf,
-                                          uint32_t bufsz) {
+                                          uint32_t bufsz, uint32_t* _Nullable rd_cnt) {
     SWD_HOST_CHECK_STARTED
     SWD_ASSERT(host->dap != NULL);
 
@@ -409,11 +427,17 @@ swd_err_t swd_host_memory_read_word_block(swd_host_t *host, uint32_t start_addr,
     err = swd_dap_port_write(host->dap, AP_TAR, start_addr);
     SWD_HOST_RETURN_IF_NON_OK(err);
 
+    if (rd_cnt != NULL) {
+        *rd_cnt = 0;
+    }
     for (uint32_t i = 0; i < bufsz; i++) {
         err = swd_dap_port_read(host->dap, AP_DRW, data_buf + i);
         if (err != SWD_OK) {
             SWD_LOGW("Read failed at data buffer index %" PRIu32, i);
             return err;
+        }
+        if (rd_cnt != NULL) {
+            *rd_cnt += 1;
         }
     }
 
@@ -426,7 +450,7 @@ swd_err_t swd_host_memory_read_word_block(swd_host_t *host, uint32_t start_addr,
 }
 
 swd_err_t swd_host_memory_read_byte_block(swd_host_t *host, uint32_t start_addr, uint8_t *data_buf,
-                                          uint32_t bufsz) {
+                                          uint32_t bufsz, uint32_t* _Nullable rd_cnt) {
     SWD_HOST_CHECK_STARTED
     SWD_ASSERT(host->dap != NULL);
 
@@ -437,10 +461,14 @@ swd_err_t swd_host_memory_read_byte_block(swd_host_t *host, uint32_t start_addr,
 
     uint32_t end_addr = start_addr + bufsz;
 
+    if (rd_cnt != NULL) {
+        *rd_cnt = 0;
+    }
+
     // Buffer for reads to be written to
     uint32_t word_buf;
     uint8_t byte_offset = start_addr & 0x3;
-    if (byte_offset) {
+    if (byte_offset != 0x0) {
         uint8_t shamt;
         err = swd_host_memory_read_word(host, start_addr & ~0x3, &word_buf);
         SWD_HOST_RETURN_IF_NON_OK(err);
@@ -450,7 +478,11 @@ swd_err_t swd_host_memory_read_byte_block(swd_host_t *host, uint32_t start_addr,
         }
         start_addr += (4 - byte_offset);
         bufsz -= (4 - byte_offset);
+        if (rd_cnt != NULL) {
+            *rd_cnt += (4 - byte_offset);
+        }
     }
+
 
     err = swd_dap_port_write(host->dap, AP_TAR, start_addr);
     SWD_HOST_RETURN_IF_NON_OK(err);
@@ -463,10 +495,13 @@ swd_err_t swd_host_memory_read_byte_block(swd_host_t *host, uint32_t start_addr,
             data_buf[i] = (word_buf & (0xFF << shamt)) >> shamt;
         }
         data_buf += 4;
+        if (rd_cnt != NULL) {
+            *rd_cnt += 4;
+        }
     }
 
     byte_offset = end_addr & 0x3;
-    if (byte_offset) {
+    if (byte_offset != 0x0) {
         uint8_t shamt;
         err = swd_host_memory_read_word(host, end_addr & ~0x3, &word_buf);
         SWD_HOST_RETURN_IF_NON_OK(err);
@@ -474,7 +509,11 @@ swd_err_t swd_host_memory_read_byte_block(swd_host_t *host, uint32_t start_addr,
             shamt = 8 * i;
             *(data_buf++) = (word_buf & (0xFF << shamt)) >> shamt;
         }
+        if (rd_cnt != NULL) {
+            *rd_cnt += byte_offset;
+        }
     }
+
 
     // Disable Auto increment TAR
     SWD_LOGD("Disabling auto-increment TAR");
